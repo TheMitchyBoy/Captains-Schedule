@@ -5,7 +5,7 @@ Learns recurring assignment patterns from historical dispatch data and projects
 them forward to answer: "When will captain X likely work next?"
 
 Core approach:
-  1. After each CSV upload, aggregate historical shifts by (captain, weekday, ship, times)
+  1. After each XML upload, aggregate historical shifts by (captain, weekday, ship, times)
   2. Compute confidence = how often this assignment occurs vs. all shifts for that captain on that weekday
   3. For each future date, apply matching weekday patterns and attach busy-day scores
 """
@@ -32,7 +32,7 @@ def rebuild_patterns(db: Session) -> int:
     """
     Recompute all captain patterns from the full schedule history.
 
-    Called after every CSV upload so predictions always reflect the complete
+    Called after every XML upload so predictions always reflect the complete
     dataset. Deletes existing patterns and rebuilds from scratch.
     """
     db.query(CaptainPattern).delete()

@@ -5,7 +5,7 @@ When predicting how busy a port day will be, we sum the passenger capacity of
 all ships scheduled (or historically typical) for that date. This module:
 
   - Seeds a built-in registry of 100+ major cruise ships
-  - Fuzzy-matches ship names from CSV data to known vessels
+  - Fuzzy-matches ship names from XML data to known vessels
   - Falls back to a default capacity estimate for unknown ships
 """
 

@@ -2,10 +2,10 @@
 SQLAlchemy ORM models for schedule storage and learned patterns.
 
 Tables:
-  - schedule_entries: Raw rows imported from dispatch CSV uploads
+  - schedule_entries: Raw rows imported from dispatch XML uploads
   - ship_capacities:  Passenger counts used to estimate port busyness
   - captain_patterns: Learned day-of-week assignment patterns per boat code
-  - upload_logs:      Audit trail of each CSV import
+  - upload_logs:      Audit trail of each XML import
 """
 
 from datetime import date, datetime
@@ -21,21 +21,21 @@ class ScheduleEntry(Base):
     A single dispatch row: one ship assignment on one date with check-in/out
     times and the boat/captain codes assigned to operate it.
 
-    The unique constraint prevents duplicate rows when the same CSV is uploaded
+    The unique constraint prevents duplicate rows when the same XML is uploaded
     twice or when overlapping files contain identical assignments.
     """
 
     __tablename__ = "schedule_entries"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    date_header: Mapped[str] = mapped_column(String(255), nullable=False)  # Original CSV line, e.g. "Thursday 6/4 - 6 ships"
+    date_header: Mapped[str] = mapped_column(String(255), nullable=False)  # Original dispatch line, e.g. "Thursday 6/4 - 6 ships"
     schedule_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)  # Parsed date used for queries and predictions
     ship: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     checkin_time: Mapped[str] = mapped_column(String(32), nullable=False)
     return_time: Mapped[str] = mapped_column(String(32), nullable=False)
     boat_codes: Mapped[str] = mapped_column(String(255), nullable=False, index=True)  # May contain multiple codes: "CPT-A / OP-12"
     ship_count: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Parsed from date_header when available
-    upload_batch_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)  # Groups rows from the same CSV upload
+    upload_batch_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)  # Groups rows from the same XML upload
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
@@ -73,7 +73,7 @@ class CaptainPattern(Base):
     A learned recurring assignment: captain X tends to work ship Y on day Z
     at specific check-in/return times.
 
-    Rebuilt from scratch after every CSV upload so patterns always reflect
+    Rebuilt from scratch after every XML upload so patterns always reflect
     the full historical dataset. Confidence = occurrences / total shifts
     for that captain on that weekday.
     """
@@ -105,7 +105,7 @@ class CaptainPattern(Base):
 
 class UploadLog(Base):
     """
-    Record of each CSV file upload for auditing and troubleshooting.
+    Record of each XML file upload for auditing and troubleshooting.
 
     Stores how many rows were newly imported vs. skipped (duplicates or updates).
     """

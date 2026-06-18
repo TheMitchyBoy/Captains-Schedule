@@ -2,7 +2,7 @@
 <!--
   Captain Schedule Predictor — web dashboard.
 
-  Single-page app that uploads dispatch CSVs and displays:
+  Single-page app that uploads dispatch XML files and displays:
     - Future captain shift predictions
     - Per-captain overview cards
     - Busy-day calendar (passenger volume estimates)
@@ -28,7 +28,7 @@
           <div class="brand-icon">⚓</div>
           <div>
             <h1>Captain Schedule Predictor</h1>
-            <p class="subtitle">Upload dispatch CSVs · Learn patterns · Forecast captain work days</p>
+            <p class="subtitle">Upload dispatch XML · Learn patterns · Forecast captain work days</p>
           </div>
         </div>
         <div class="stats-bar" id="statsBar">
@@ -42,13 +42,13 @@
 
     <main class="main">
       <section class="card upload-section">
-        <h2>Upload Schedule CSV</h2>
-        <p class="card-desc">Expected columns: <code>date_header</code>, <code>ship</code>, <code>checkin_time</code>, <code>return_time</code>, <code>boat_codes</code></p>
+        <h2>Upload Schedule XML</h2>
+        <p class="card-desc">Expected elements per <code>&lt;schedule&gt;</code>: <code>date_header</code>, <code>ship</code>, <code>checkin_time</code>, <code>return_time</code>, <code>boat_codes</code></p>
         <div class="upload-zone" id="uploadZone">
-          <input type="file" id="fileInput" accept=".csv,text/csv,text/plain,.txt" hidden />
+          <input type="file" id="fileInput" accept=".xml,text/xml,application/xml" hidden />
           <div class="upload-content">
             <div class="upload-icon">📄</div>
-            <p>Drag & drop a CSV here, or <button type="button" class="link-btn" id="browseBtn">browse files</button></p>
+            <p>Drag & drop an XML file here, or <button type="button" class="link-btn" id="browseBtn">browse files</button></p>
             <p class="upload-hint">Data is saved to the database and used to improve future predictions</p>
           </div>
         </div>
@@ -111,7 +111,7 @@
                 </tr>
               </thead>
               <tbody id="predictionsBody">
-                <tr><td colspan="8" class="empty">Upload a CSV to generate predictions</td></tr>
+                <tr><td colspan="8" class="empty">Upload an XML file to generate predictions</td></tr>
               </tbody>
             </table>
           </div>
@@ -183,7 +183,7 @@
     </main>
 
     <footer class="footer">
-      <p>Captain Schedule Predictor · Learns from every CSV upload · Ship capacity data from public cruise registries</p>
+      <p>Captain Schedule Predictor · Learns from every XML upload · Ship capacity data from public cruise registries</p>
     </footer>
   </div>
 

@@ -29,7 +29,7 @@ class ScheduleEntryOut(BaseModel):
 
 
 class UploadResult(BaseModel):
-    """Summary returned after a successful CSV upload."""
+    """Summary returned after a successful XML upload."""
 
     batch_id: str
     filename: str

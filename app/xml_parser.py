@@ -1,27 +1,37 @@
 """
-CSV parsing and schedule import pipeline.
+XML parsing and schedule import pipeline.
 
 Responsible for:
-  1. Reading uploaded CSV bytes (handles Excel exports, alternate delimiters)
-  2. Normalizing column names to the expected schema
+  1. Reading uploaded XML bytes (dispatch schedule exports)
+  2. Normalizing element names to the expected schema
   3. Parsing dispatch date headers into concrete dates
   4. Persisting rows to the database with deduplication
 
-Expected CSV columns (aliases are also accepted — see COLUMN_ALIASES):
-  date_header, ship, checkin_time, return_time, boat_codes
+Expected XML structure (element aliases also accepted — see FIELD_ALIASES):
+
+    <schedules>
+      <schedule>
+        <date_header>Thursday 6/4 - 6 ships</date_header>
+        <ship>Symphony of the Seas</ship>
+        <checkin_time>7:00 AM</checkin_time>
+        <return_time>4:30 PM</return_time>
+        <boat_codes>CPT-A / OP-12</boat_codes>
+      </schedule>
+    </schedules>
 """
+
 import re
 import uuid
+import xml.etree.ElementTree as ET
 from datetime import date, datetime
 
-import pandas as pd
 from sqlalchemy.orm import Session
 
 from app.models import ScheduleEntry, UploadLog
 from app.ship_data import get_ship_capacity
 
-# Canonical column names every valid dispatch CSV must map to after normalization.
-REQUIRED_COLUMNS = {
+# Canonical field names every valid dispatch XML entry must provide.
+REQUIRED_FIELDS = {
     "date_header",
     "ship",
     "checkin_time",
@@ -29,8 +39,8 @@ REQUIRED_COLUMNS = {
     "boat_codes",
 }
 
-# Maps canonical names to common header variants seen in Excel/manual exports.
-COLUMN_ALIASES: dict[str, list[str]] = {
+# Maps canonical names to common element-name variants.
+FIELD_ALIASES: dict[str, list[str]] = {
     "date_header": [
         "date_header",
         "date",
@@ -76,6 +86,10 @@ COLUMN_ALIASES: dict[str, list[str]] = {
     ],
 }
 
+# Container/row element names that hold individual schedule entries.
+ENTRY_TAGS = {"schedule", "entry", "row", "dispatch", "assignment"}
+ROOT_TAGS = {"schedules", "dispatch_list", "schedule_list", "root", "data"}
+
 # Matches dispatch date lines like "Thursday 6/4 - 6 ships".
 DATE_HEADER_PATTERN = re.compile(
     r"(?P<weekday>[A-Za-z]+)\s+(?P<month>\d{1,2})/(?P<day>\d{1,2})"
@@ -84,35 +98,48 @@ DATE_HEADER_PATTERN = re.compile(
 )
 
 
-def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Lowercase and rename CSV headers to the canonical column names."""
-    df = df.copy()
-    df.columns = [
-        str(c).strip().lower().replace(" ", "_").replace("-", "_")
-        for c in df.columns
-    ]
-
-    rename_map: dict[str, str] = {}
-    for target, aliases in COLUMN_ALIASES.items():
-        if target in df.columns:
-            continue
-        for alias in aliases:
-            alias_norm = alias.lower().replace(" ", "_").replace("-", "_")
-            if alias_norm in df.columns and alias_norm not in rename_map:
-                rename_map[alias_norm] = target
-                break
-
-    if rename_map:
-        df = df.rename(columns=rename_map)
-    return df
+def _normalize_tag(tag: str) -> str:
+    """Strip XML namespace and normalize an element tag to snake_case."""
+    if "}" in tag:
+        tag = tag.split("}", 1)[1]
+    return tag.strip().lower().replace(" ", "_").replace("-", "_")
 
 
-def _cell_str(value) -> str:
-    """Convert a pandas cell to a clean string, treating NaN/None as empty."""
-    if value is None or (isinstance(value, float) and pd.isna(value)):
+def _resolve_field_name(tag: str) -> str | None:
+    """Map an XML element tag to a canonical field name, if recognized."""
+    normalized = _normalize_tag(tag)
+    if normalized in REQUIRED_FIELDS:
+        return normalized
+    for target, aliases in FIELD_ALIASES.items():
+        alias_norms = {a.lower().replace(" ", "_").replace("-", "_") for a in aliases}
+        if normalized in alias_norms:
+            return target
+    return None
+
+
+def _element_text(element: ET.Element) -> str:
+    """Return trimmed text content from an XML element."""
+    if element.text is None:
         return ""
-    text = str(value).strip()
-    return "" if text.lower() == "nan" else text
+    return element.text.strip()
+
+
+def _extract_entry_fields(entry: ET.Element) -> dict[str, str]:
+    """Read child elements (or attributes) from one schedule entry into a field dict."""
+    fields: dict[str, str] = {}
+
+    for child in entry:
+        field = _resolve_field_name(child.tag)
+        if field:
+            fields[field] = _element_text(child)
+
+    # Fall back to attributes when fields are provided as attrs instead of child elements.
+    for attr, value in entry.attrib.items():
+        field = _resolve_field_name(attr)
+        if field and field not in fields and value.strip():
+            fields[field] = value.strip()
+
+    return fields
 
 
 def parse_date_from_header(date_header: str, reference_year: int | None = None) -> tuple[date | None, int | None]:
@@ -145,7 +172,7 @@ def infer_reference_year(rows: list[dict]) -> int:
     """
     Choose the most likely year for dates that omit a year in the header.
 
-    Dispatch CSVs often use "6/4" without a year. We try the previous, current,
+    Dispatch files often use "6/4" without a year. We try the previous, current,
     and next calendar year and pick whichever keeps parsed dates closest to today.
     """
     today = date.today()
@@ -159,7 +186,7 @@ def infer_reference_year(rows: list[dict]) -> int:
         day = int(match.group("day"))
         for year in (today.year - 1, today.year, today.year + 1):
             try:
-                d = date(year, month, day)
+                date(year, month, day)
                 candidates.add(year)
             except ValueError:
                 continue
@@ -188,48 +215,81 @@ def infer_reference_year(rows: list[dict]) -> int:
     return min(candidates, key=score)
 
 
-def parse_csv_content(content: bytes, filename: str = "upload.csv") -> tuple[list[dict], list[str]]:
-    """
-    Parse raw CSV bytes into validated schedule row dicts.
+def _find_schedule_entries(root: ET.Element) -> list[ET.Element]:
+    """Locate schedule entry elements regardless of root/container naming."""
+    root_tag = _normalize_tag(root.tag)
 
-    Returns (parsed_rows, errors). Individual bad rows produce error messages
-    but do not fail the entire file — valid rows are still returned.
+    # Direct children that look like entries.
+    entries = [child for child in root if _normalize_tag(child.tag) in ENTRY_TAGS]
+    if entries:
+        return entries
+
+    # Root is a single entry element.
+    if root_tag in ENTRY_TAGS:
+        return [root]
+
+    # Search one level deeper inside a container wrapper.
+    for child in root:
+        child_tag = _normalize_tag(child.tag)
+        if child_tag in ROOT_TAGS or child_tag.endswith("list"):
+            nested = [item for item in child if _normalize_tag(item.tag) in ENTRY_TAGS]
+            if nested:
+                return nested
+
+    # Last resort: any element that contains all required child fields.
+    found: list[ET.Element] = []
+    for elem in root.iter():
+        fields = _extract_entry_fields(elem)
+        if REQUIRED_FIELDS.issubset(fields):
+            found.append(elem)
+    return found
+
+
+def parse_xml_content(content: bytes, filename: str = "upload.xml") -> tuple[list[dict], list[str]]:
+    """
+    Parse raw XML bytes into validated schedule row dicts.
+
+    Returns (parsed_rows, errors). Individual bad entries produce error messages
+    but do not fail the entire file — valid entries are still returned.
     """
     errors: list[str] = []
-    df = None
 
-    # Try auto-detect, comma, tab, and semicolon delimiters (Excel/locale variants).
-    for sep in (None, ",", "\t", ";"):
-        try:
-            df = pd.read_csv(io.BytesIO(content), sep=sep, engine="python" if sep else "c")
-            if df is not None and len(df.columns) >= len(REQUIRED_COLUMNS):
-                break
-        except Exception:
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError as exc:
+        return [], [f"Could not read XML: {exc}"]
+
+    entries = _find_schedule_entries(root)
+    if not entries:
+        return [], ["No schedule entries found in XML. Expected <schedule> elements with dispatch fields."]
+
+    raw_rows: list[dict] = []
+    for idx, entry in enumerate(entries, start=1):
+        fields = _extract_entry_fields(entry)
+        missing = REQUIRED_FIELDS - set(fields)
+        if missing:
+            tag = _normalize_tag(entry.tag)
+            errors.append(f"Entry {idx} (<{tag}>): missing fields: {', '.join(sorted(missing))}")
             continue
+        raw_rows.append(fields)
 
-    if df is None or df.empty:
-        return [], ["Could not read CSV: unsupported format or empty file"]
+    if not raw_rows:
+        return [], errors or ["No valid schedule entries found in XML"]
 
-    df = _normalize_columns(df)
-    missing = REQUIRED_COLUMNS - set(df.columns)
-    if missing:
-        return [], [f"Missing required columns: {', '.join(sorted(missing))}"]
-
-    raw_rows = df[list(REQUIRED_COLUMNS)].to_dict(orient="records")
     reference_year = infer_reference_year(raw_rows)
     parsed_rows: list[dict] = []
 
-    for idx, row in enumerate(raw_rows, start=2):
-        date_header = _cell_str(row.get("date_header"))
+    for idx, row in enumerate(raw_rows, start=1):
+        date_header = row.get("date_header", "").strip()
         schedule_date, ship_count = parse_date_from_header(date_header, reference_year)
 
         if schedule_date is None:
-            errors.append(f"Row {idx}: could not parse date from '{date_header}'")
+            errors.append(f"Entry {idx}: could not parse date from '{date_header}'")
             continue
 
-        ship = _cell_str(row.get("ship"))
+        ship = row.get("ship", "").strip()
         if not ship:
-            errors.append(f"Row {idx}: ship name is empty")
+            errors.append(f"Entry {idx}: ship name is empty")
             continue
 
         parsed_rows.append(
@@ -237,9 +297,9 @@ def parse_csv_content(content: bytes, filename: str = "upload.csv") -> tuple[lis
                 "date_header": date_header,
                 "schedule_date": schedule_date,
                 "ship": ship,
-                "checkin_time": _cell_str(row.get("checkin_time")),
-                "return_time": _cell_str(row.get("return_time")),
-                "boat_codes": _cell_str(row.get("boat_codes")),
+                "checkin_time": row.get("checkin_time", "").strip(),
+                "return_time": row.get("return_time", "").strip(),
+                "boat_codes": row.get("boat_codes", "").strip(),
                 "ship_count": ship_count,
             }
         )
@@ -249,7 +309,7 @@ def parse_csv_content(content: bytes, filename: str = "upload.csv") -> tuple[lis
 
 def import_schedules(db: Session, content: bytes, filename: str) -> tuple[str, int, int, list[str]]:
     """
-    Parse a CSV and persist schedule rows to the database.
+    Parse an XML file and persist schedule rows to the database.
 
     Deduplication strategy:
       - Within the same upload batch: skip duplicate keys in-memory
@@ -258,11 +318,11 @@ def import_schedules(db: Session, content: bytes, filename: str) -> tuple[str, i
     Returns (batch_id, rows_imported, rows_skipped, parse_errors).
     """
     batch_id = str(uuid.uuid4())
-    rows, errors = parse_csv_content(content, filename)
+    rows, errors = parse_xml_content(content, filename)
 
     imported = 0
     skipped = 0
-    seen_in_batch: set[tuple] = set()  # Prevent duplicate inserts within one CSV commit
+    seen_in_batch: set[tuple] = set()  # Prevent duplicate inserts within one XML commit
 
     for row in rows:
         key = (
@@ -312,7 +372,7 @@ def import_schedules(db: Session, content: bytes, filename: str) -> tuple[str, i
         imported += 1
 
     if not rows and not errors:
-        errors.append("No valid rows found in CSV")
+        errors.append("No valid rows found in XML")
 
     notes = "; ".join(errors[:10]) if errors else None
     if errors and len(errors) > 10:

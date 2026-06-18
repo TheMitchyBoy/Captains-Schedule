@@ -1,10 +1,10 @@
 # Captain Schedule Predictor
 
-Upload cruise dispatch CSV schedules, store them in a SQLite database, and predict when captains will work — as far into the future as your historical data allows.
+Upload cruise dispatch XML schedules, store them in a SQLite database, and predict when captains will work — as far into the future as your historical data allows.
 
 ## Features
 
-- **CSV upload** — Drag-and-drop dispatch schedules with columns: `date_header`, `ship`, `checkin_time`, `return_time`, `boat_codes`
+- **XML upload** — Drag-and-drop dispatch schedules with elements: `date_header`, `ship`, `checkin_time`, `return_time`, `boat_codes`
 - **Persistent database** — Every upload is stored and deduplicated; patterns improve with more data
 - **Captain predictions** — Learns day-of-week patterns per captain/boat code and forecasts shifts up to 365 days ahead
 - **Busy day calendar** — Estimates port busyness using passenger capacity data for 100+ major cruise ships
@@ -25,32 +25,50 @@ Open [http://localhost:8000](http://localhost:8000) in your browser.
 Upload the included sample file to try it out:
 
 ```
-sample_data/sample_schedule.csv
+sample_data/sample_schedule.xml
 ```
 
-## CSV Format
+## XML Format
 
-| Column       | Description                                                 |
-| ------------ | ----------------------------------------------------------- |
-| date_header  | Original dispatch date line (e.g. "Thursday 6/4 - 6 ships") |
-| ship         | Cruise ship name                                            |
-| checkin_time | Check-in time                                               |
-| return_time  | Return time                                                 |
-| boat_codes   | Assigned boat/operator codes (comma or slash separated)     |
+Each schedule file contains one or more `<schedule>` entries inside a root `<schedules>` element:
+
+| Element        | Description                                                 |
+| -------------- | ----------------------------------------------------------- |
+| date_header    | Original dispatch date line (e.g. "Thursday 6/4 - 6 ships") |
+| ship           | Cruise ship name                                            |
+| checkin_time   | Check-in time                                               |
+| return_time    | Return time                                                 |
+| boat_codes     | Assigned boat/operator codes (comma or slash separated)     |
 
 Example:
 
-```csv
-date_header,ship,checkin_time,return_time,boat_codes
-Thursday 6/4 - 6 ships,Symphony of the Seas,7:00 AM,4:30 PM,CPT-A / OP-12
-Friday 6/5 - 5 ships,Carnival Horizon,8:00 AM,5:00 PM,CPT-B
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<schedules>
+  <schedule>
+    <date_header>Thursday 6/4 - 6 ships</date_header>
+    <ship>Symphony of the Seas</ship>
+    <checkin_time>7:00 AM</checkin_time>
+    <return_time>4:30 PM</return_time>
+    <boat_codes>CPT-A / OP-12</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Friday 6/5 - 5 ships</date_header>
+    <ship>Carnival Horizon</ship>
+    <checkin_time>8:00 AM</checkin_time>
+    <return_time>5:00 PM</return_time>
+    <boat_codes>CPT-B</boat_codes>
+  </schedule>
+</schedules>
 ```
+
+Alternative element names are also accepted (e.g. `<entry>`, `<vessel>`, `<check_in_time>`, `<boat_code>`).
 
 ## API Endpoints
 
 | Method | Path                  | Description                          |
 | ------ | --------------------- | ------------------------------------ |
-| POST   | `/api/upload`         | Upload a CSV file                    |
+| POST   | `/api/upload`         | Upload an XML file                   |
 | GET    | `/api/schedules`      | List stored schedule entries         |
 | GET    | `/api/predictions`    | Get future captain shift predictions |
 | GET    | `/api/captains`       | Captain overview with next shift     |
@@ -68,7 +86,7 @@ Interactive API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
 3. **Future projection** — Patterns are projected forward for 30–365 days
 4. **Busy day weighting** — Ship passenger counts (from a built-in registry of major cruise lines) estimate how busy each day will be
 
-The more CSV data you upload over time, the more accurate and far-reaching the predictions become.
+The more XML data you upload over time, the more accurate and far-reaching the predictions become.
 
 ## Database
 

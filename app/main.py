@@ -5,7 +5,7 @@ Serves two roles:
   1. JSON API at /api/* for schedule upload, queries, and predictions
   2. Static web dashboard at / for the browser-based UI
 
-Upload flow: receive CSV → parse & persist → rebuild captain patterns → return summary
+Upload flow: receive XML → parse & persist → rebuild captain patterns → return summary
 """
 from datetime import date
 from pathlib import Path
@@ -18,7 +18,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.csv_parser import import_schedules
+from app.xml_parser import import_schedules
 from app.database import get_db, init_db
 from app.models import ScheduleEntry, ShipCapacity, UploadLog
 from app.predictor import (
@@ -42,30 +42,30 @@ def _resolve_upload_filename(filename: str | None, content_type: str | None) -> 
     """Use the uploaded filename, or fall back when browsers omit it on drag-and-drop."""
     if filename and filename.strip():
         return filename.strip()
-    if content_type and "csv" in content_type.lower():
-        return "upload.csv"
-    return "upload.csv"
+    if content_type and "xml" in content_type.lower():
+        return "upload.xml"
+    return "upload.xml"
 
 
-def _looks_like_csv(filename: str | None, content_type: str | None, content: bytes) -> bool:
+def _looks_like_xml(filename: str | None, content_type: str | None, content: bytes) -> bool:
     """
-    Determine whether uploaded bytes are likely a dispatch CSV.
+    Determine whether uploaded bytes are likely a dispatch XML file.
 
-    Checks file extension, MIME type, and a content sniff of the header row.
-    This avoids rejecting valid CSVs when the browser sends no filename.
+    Checks file extension, MIME type, and a content sniff for XML declaration
+    or schedule element tags. This avoids rejecting valid XML when the browser
+    sends no filename.
     """
     if filename and filename.strip():
         lower = filename.strip().lower()
-        if lower.endswith((".csv", ".txt", ".tsv")):
+        if lower.endswith(".xml"):
             return True
 
     if content_type:
         ct = content_type.lower().split(";")[0].strip()
         if ct in (
-            "text/csv",
-            "application/csv",
-            "text/plain",
-            "application/vnd.ms-excel",
+            "text/xml",
+            "application/xml",
+            "application/xhtml+xml",
             "application/octet-stream",
         ):
             return True
@@ -74,28 +74,23 @@ def _looks_like_csv(filename: str | None, content_type: str | None, content: byt
         return False
 
     try:
-        sample = content[:4096].decode("utf-8-sig", errors="ignore")
+        sample = content[:4096].decode("utf-8-sig", errors="ignore").strip()
     except Exception:
         return False
 
-    if not sample.strip():
+    if not sample:
         return False
 
-    first_line = sample.splitlines()[0] if sample.splitlines() else ""
-    # Accept comma, tab, or semicolon delimited files with expected headers.
-    for delimiter in (",", "\t", ";"):
-        if delimiter in first_line and any(
-            col in first_line.lower() for col in ("date_header", "ship", "checkin", "boat")
-        ):
-            return True
-
-    return "," in first_line and "\n" in sample
+    lower = sample.lower()
+    if lower.startswith("<?xml") or lower.startswith("<"):
+        return any(tag in lower for tag in ("<schedules", "<schedule", "<entry", "<dispatch"))
+    return False
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 app = FastAPI(
     title="Captain Schedule Predictor",
-    description="Upload dispatch CSV schedules, store them in a database, and predict future captain work days.",
+    description="Upload dispatch XML schedules, store them in a database, and predict future captain work days.",
     version="1.0.0",
 )
 
@@ -139,14 +134,14 @@ def health():
 
 
 @app.post("/api/upload", response_model=UploadResult)
-async def upload_csv(
+async def upload_xml(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
     """
-    Accept a dispatch CSV upload, persist rows, and rebuild prediction patterns.
+    Accept a dispatch XML upload, persist rows, and rebuild prediction patterns.
 
-    Returns counts of imported vs. skipped (duplicate) rows. Row-level parse
+    Returns counts of imported vs. skipped (duplicate) rows. Entry-level parse
     warnings are included in the `notes` field.
     """
     try:
@@ -155,17 +150,17 @@ async def upload_csv(
             raise HTTPException(status_code=400, detail="Uploaded file is empty")
 
         filename = _resolve_upload_filename(file.filename, file.content_type)
-        if not _looks_like_csv(file.filename, file.content_type, content):
+        if not _looks_like_xml(file.filename, file.content_type, content):
             raise HTTPException(
                 status_code=400,
-                detail="Could not recognize file as CSV. Use a .csv file with columns: date_header, ship, checkin_time, return_time, boat_codes",
+                detail="Could not recognize file as XML. Use an .xml file with <schedule> entries containing: date_header, ship, checkin_time, return_time, boat_codes",
             )
 
         batch_id, imported, skipped, errors = import_schedules(db, content, filename)
         rebuild_patterns(db)
 
         if imported == 0 and skipped == 0:
-            detail = errors[0] if errors else "No valid rows could be imported from this CSV"
+            detail = errors[0] if errors else "No valid entries could be imported from this XML"
             raise HTTPException(status_code=400, detail=detail)
 
         return UploadResult(
@@ -285,7 +280,7 @@ def stats(db: Session = Depends(get_db)):
 
 @app.get("/api/uploads")
 def list_uploads(db: Session = Depends(get_db)):
-    """Return recent CSV upload history for the dashboard."""
+    """Return recent XML upload history for the dashboard."""
     logs = db.query(UploadLog).order_by(UploadLog.uploaded_at.desc()).limit(20).all()
     return [
         {

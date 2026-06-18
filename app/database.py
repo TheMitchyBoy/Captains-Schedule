@@ -1,7 +1,7 @@
 """
 Database connection and session management.
 
-Uses SQLite for local persistence so schedule history accumulates across CSV
+Uses SQLite for local persistence so schedule history accumulates across XML
 uploads. The database file (`captain_scheduler.db`) is created automatically
 on first startup.
 """

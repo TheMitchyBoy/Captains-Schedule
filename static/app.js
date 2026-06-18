@@ -2,7 +2,7 @@
  * Captain Schedule Predictor — frontend dashboard logic.
  *
  * Communicates with the FastAPI backend at /api/* to:
- *   - Upload dispatch CSV files
+ *   - Upload dispatch XML files
  *   - Display captain shift predictions and busy-day calendar
  *   - Show upload history and raw stored schedules
  *
@@ -120,7 +120,7 @@ async function loadPredictions() {
   try {
     const data = await fetchJSON("/api/predictions" + queryParams());
     if (!data.length) {
-      tbody.innerHTML = '<tr><td colspan="8" class="empty">No predictions — upload historical CSV data first</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="empty">No predictions — upload historical XML data first</td></tr>';
       return;
     }
     tbody.innerHTML = data.slice(0, 200).map((p) => `
@@ -194,7 +194,7 @@ async function loadCalendar() {
   }
 }
 
-/** Load CSV upload history from GET /api/uploads. */
+/** Load XML upload history from GET /api/uploads. */
 async function loadUploads() {
   const tbody = $("#uploadsBody");
   try {
@@ -254,13 +254,13 @@ async function refreshAll() {
   ]);
 }
 
-/** POST a CSV file to /api/upload and refresh the dashboard on success. */
+/** POST an XML file to /api/upload and refresh the dashboard on success. */
 async function uploadFile(file) {
   const resultEl = $("#uploadResult");
   resultEl.classList.remove("hidden", "success", "error");
 
   const form = new FormData();
-  const filename = file.name || "upload.csv";
+  const filename = file.name || "upload.xml";
   form.append("file", file, filename);
 
   try {
@@ -285,7 +285,7 @@ async function uploadFile(file) {
   }
 }
 
-/** Wire up drag-and-drop and file picker for CSV upload. */
+/** Wire up drag-and-drop and file picker for XML upload. */
 function setupUpload() {
   const zone = $("#uploadZone");
   const input = $("#fileInput");
