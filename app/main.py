@@ -1,0 +1,202 @@
+from datetime import date
+from pathlib import Path
+
+from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
+from app.csv_parser import import_schedules
+from app.database import get_db, init_db
+from app.models import ScheduleEntry, ShipCapacity, UploadLog
+from app.predictor import (
+    get_busy_calendar,
+    get_captain_summaries,
+    predict_captain_schedule,
+    rebuild_patterns,
+)
+from app.schemas import (
+    CaptainPrediction,
+    CaptainSummary,
+    ScheduleEntryOut,
+    ShipCapacityOut,
+    StatsOut,
+    UploadResult,
+)
+from app.ship_data import lookup_ship_online, seed_ship_capacities
+
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+
+app = FastAPI(
+    title="Captain Schedule Predictor",
+    description="Upload dispatch CSV schedules, store them in a database, and predict future captain work days.",
+    version="1.0.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.on_event("startup")
+def on_startup():
+    init_db()
+    db = next(get_db())
+    try:
+        seed_ship_capacities(db)
+    finally:
+        db.close()
+
+
+@app.get("/api/health")
+def health():
+    return {"status": "ok"}
+
+
+@app.post("/api/upload", response_model=UploadResult)
+async def upload_csv(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Please upload a .csv file")
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+
+    batch_id, imported, skipped, errors = import_schedules(db, content, file.filename)
+    rebuild_patterns(db)
+
+    return UploadResult(
+        batch_id=batch_id,
+        filename=file.filename,
+        rows_imported=imported,
+        rows_skipped=skipped,
+        notes="; ".join(errors[:5]) if errors else None,
+    )
+
+
+@app.get("/api/schedules", response_model=list[ScheduleEntryOut])
+def list_schedules(
+    start_date: date | None = None,
+    end_date: date | None = None,
+    ship: str | None = None,
+    boat_code: str | None = None,
+    limit: int = Query(default=500, le=2000),
+    db: Session = Depends(get_db),
+):
+    q = db.query(ScheduleEntry)
+    if start_date:
+        q = q.filter(ScheduleEntry.schedule_date >= start_date)
+    if end_date:
+        q = q.filter(ScheduleEntry.schedule_date <= end_date)
+    if ship:
+        q = q.filter(ScheduleEntry.ship.ilike(f"%{ship}%"))
+    if boat_code:
+        q = q.filter(ScheduleEntry.boat_codes.ilike(f"%{boat_code}%"))
+
+    return q.order_by(ScheduleEntry.schedule_date, ScheduleEntry.checkin_time).limit(limit).all()
+
+
+@app.get("/api/predictions", response_model=list[CaptainPrediction])
+def get_predictions(
+    boat_code: str | None = None,
+    days_ahead: int = Query(default=90, ge=7, le=365),
+    min_confidence: float = Query(default=0.15, ge=0.0, le=1.0),
+    db: Session = Depends(get_db),
+):
+    return predict_captain_schedule(
+        db,
+        boat_code=boat_code,
+        days_ahead=days_ahead,
+        min_confidence=min_confidence,
+    )
+
+
+@app.get("/api/captains", response_model=list[CaptainSummary])
+def list_captains(
+    days_ahead: int = Query(default=90, ge=7, le=365),
+    db: Session = Depends(get_db),
+):
+    return get_captain_summaries(db, days_ahead=days_ahead)
+
+
+@app.get("/api/busy-calendar")
+def busy_calendar(
+    days_ahead: int = Query(default=90, ge=7, le=365),
+    db: Session = Depends(get_db),
+):
+    return get_busy_calendar(db, days_ahead=days_ahead)
+
+
+@app.get("/api/ships", response_model=list[ShipCapacityOut])
+def list_ships(db: Session = Depends(get_db)):
+    return db.query(ShipCapacity).order_by(ShipCapacity.passenger_capacity.desc()).all()
+
+
+@app.post("/api/ships/lookup")
+def lookup_ship(ship_name: str, db: Session = Depends(get_db)):
+    record = lookup_ship_online(db, ship_name)
+    if not record:
+        raise HTTPException(status_code=404, detail=f"No capacity data found for '{ship_name}'")
+    return ShipCapacityOut.model_validate(record)
+
+
+@app.post("/api/patterns/rebuild")
+def patterns_rebuild(db: Session = Depends(get_db)):
+    count = rebuild_patterns(db)
+    return {"patterns_rebuilt": count}
+
+
+@app.get("/api/stats", response_model=StatsOut)
+def stats(db: Session = Depends(get_db)):
+    total = db.query(func.count(ScheduleEntry.id)).scalar() or 0
+    ships = db.query(func.count(func.distinct(ScheduleEntry.ship))).scalar() or 0
+    captains = db.query(func.count(func.distinct(ScheduleEntry.boat_codes))).scalar() or 0
+    start = db.query(func.min(ScheduleEntry.schedule_date)).scalar()
+    end = db.query(func.max(ScheduleEntry.schedule_date)).scalar()
+    uploads = db.query(func.count(UploadLog.id)).scalar() or 0
+
+    return StatsOut(
+        total_entries=total,
+        unique_ships=ships,
+        unique_captains=captains,
+        date_range_start=start,
+        date_range_end=end,
+        uploads=uploads,
+    )
+
+
+@app.get("/api/uploads")
+def list_uploads(db: Session = Depends(get_db)):
+    logs = db.query(UploadLog).order_by(UploadLog.uploaded_at.desc()).limit(20).all()
+    return [
+        {
+            "batch_id": log.batch_id,
+            "filename": log.filename,
+            "rows_imported": log.rows_imported,
+            "rows_skipped": log.rows_skipped,
+            "notes": log.notes,
+            "uploaded_at": log.uploaded_at.isoformat(),
+        }
+        for log in logs
+    ]
+
+
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+@app.get("/")
+def index():
+    index_path = STATIC_DIR / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path)
+    return {"message": "Captain Schedule Predictor API. Place static files in /static or use /docs."}

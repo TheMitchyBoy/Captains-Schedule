@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Captain Schedule Predictor</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="header-inner">
+        <div class="brand">
+          <div class="brand-icon">⚓</div>
+          <div>
+            <h1>Captain Schedule Predictor</h1>
+            <p class="subtitle">Upload dispatch CSVs · Learn patterns · Forecast captain work days</p>
+          </div>
+        </div>
+        <div class="stats-bar" id="statsBar">
+          <div class="stat"><span class="stat-value" id="statEntries">—</span><span class="stat-label">Entries</span></div>
+          <div class="stat"><span class="stat-value" id="statShips">—</span><span class="stat-label">Ships</span></div>
+          <div class="stat"><span class="stat-value" id="statCaptains">—</span><span class="stat-label">Captains</span></div>
+          <div class="stat"><span class="stat-value" id="statRange">—</span><span class="stat-label">Date Range</span></div>
+        </div>
+      </div>
+    </header>
+
+    <main class="main">
+      <section class="card upload-section">
+        <h2>Upload Schedule CSV</h2>
+        <p class="card-desc">Expected columns: <code>date_header</code>, <code>ship</code>, <code>checkin_time</code>, <code>return_time</code>, <code>boat_codes</code></p>
+        <div class="upload-zone" id="uploadZone">
+          <input type="file" id="fileInput" accept=".csv" hidden />
+          <div class="upload-content">
+            <div class="upload-icon">📄</div>
+            <p>Drag & drop a CSV here, or <button type="button" class="link-btn" id="browseBtn">browse files</button></p>
+            <p class="upload-hint">Data is saved to the database and used to improve future predictions</p>
+          </div>
+        </div>
+        <div id="uploadResult" class="upload-result hidden"></div>
+      </section>
+
+      <div class="controls card">
+        <div class="control-group">
+          <label for="captainFilter">Captain / Boat Code</label>
+          <select id="captainFilter">
+            <option value="">All captains</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label for="daysAhead">Forecast horizon</label>
+          <select id="daysAhead">
+            <option value="30">30 days</option>
+            <option value="60">60 days</option>
+            <option value="90" selected>90 days</option>
+            <option value="180">180 days</option>
+            <option value="365">365 days</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label for="minConfidence">Min confidence</label>
+          <select id="minConfidence">
+            <option value="0">Any</option>
+            <option value="0.15" selected>15%+</option>
+            <option value="0.3">30%+</option>
+            <option value="0.5">50%+</option>
+          </select>
+        </div>
+        <button type="button" class="btn secondary" id="refreshBtn">Refresh</button>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="predictions">Predictions</button>
+        <button class="tab" data-tab="captains">Captain Overview</button>
+        <button class="tab" data-tab="calendar">Busy Calendar</button>
+        <button class="tab" data-tab="history">Uploaded History</button>
+        <button class="tab" data-tab="schedules">Raw Schedules</button>
+      </div>
+
+      <section class="tab-panel active" id="panel-predictions">
+        <div class="card">
+          <h2>Future Captain Shifts</h2>
+          <p class="card-desc">Predicted work days based on historical day-of-week patterns and ship assignments</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Day</th>
+                  <th>Captain</th>
+                  <th>Ship</th>
+                  <th>Check-in</th>
+                  <th>Return</th>
+                  <th>Confidence</th>
+                  <th>Busy Day</th>
+                </tr>
+              </thead>
+              <tbody id="predictionsBody">
+                <tr><td colspan="8" class="empty">Upload a CSV to generate predictions</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="panel-captains">
+        <div class="card">
+          <h2>Captain Overview</h2>
+          <p class="card-desc">Each captain's next predicted shift and total forecast count</p>
+          <div class="captain-grid" id="captainGrid">
+            <p class="empty">No captain data yet</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="panel-calendar">
+        <div class="card">
+          <h2>Busy Day Calendar</h2>
+          <p class="card-desc">Estimated passenger volume from cruise ship capacity data — darker = busier port day</p>
+          <div class="calendar-grid" id="calendarGrid"></div>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="panel-history">
+        <div class="card">
+          <h2>Upload History</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Uploaded</th>
+                  <th>Filename</th>
+                  <th>Imported</th>
+                  <th>Updated</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody id="uploadsBody">
+                <tr><td colspan="5" class="empty">No uploads yet</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="panel-schedules">
+        <div class="card">
+          <h2>Stored Schedules</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Header</th>
+                  <th>Ship</th>
+                  <th>Check-in</th>
+                  <th>Return</th>
+                  <th>Boat Codes</th>
+                </tr>
+              </thead>
+              <tbody id="schedulesBody">
+                <tr><td colspan="6" class="empty">No schedules stored</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>Captain Schedule Predictor · Learns from every CSV upload · Ship capacity data from public cruise registries</p>
+    </footer>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
