@@ -242,9 +242,35 @@ async function loadSchedules() {
 }
 
 /** Refresh all dashboard panels (called on load and after upload). */
+/** Load OpenAI integration status from GET /api/health. */
+async function loadAiStatus() {
+  const badge = $("#aiStatusBadge");
+  if (!badge) return;
+  try {
+    const data = await fetchJSON("/api/health");
+    const ai = data.ai || {};
+    badge.classList.remove("connected", "disabled", "error");
+
+    if (ai.enabled && ai.connected) {
+      badge.classList.add("connected");
+      badge.textContent = `AI recovery active · ${ai.model}`;
+    } else if (ai.enabled) {
+      badge.classList.add("error");
+      badge.textContent = `AI configured but unavailable · ${ai.message}`;
+    } else {
+      badge.classList.add("disabled");
+      badge.textContent = "AI recovery disabled · set OPENAI_API_KEY to enable";
+    }
+  } catch (e) {
+    badge.classList.add("error");
+    badge.textContent = "Could not check AI status";
+  }
+}
+
 async function refreshAll() {
   await Promise.all([
     loadStats(),
+    loadAiStatus(),
     loadCaptainsFilter(),
     loadPredictions(),
     loadCaptainOverview(),

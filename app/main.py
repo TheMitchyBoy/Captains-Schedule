@@ -18,6 +18,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.config import get_openai_status, get_settings, init_openai_verification
 from app.xml_parser import import_schedules
 from app.database import get_db, init_db
 from app.models import ScheduleEntry, ShipCapacity, UploadLog
@@ -122,7 +123,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 @app.on_event("startup")
 def on_startup():
-    """Initialize database tables and seed the ship capacity registry."""
+    """Initialize database tables, seed ship data, and verify optional OpenAI integration."""
     init_db()
     db = next(get_db())
     try:
@@ -130,10 +131,19 @@ def on_startup():
     finally:
         db.close()
 
+    settings = get_settings()
+    if settings.openai.is_configured:
+        ok, message = init_openai_verification()
+        if ok:
+            print(f"OpenAI integration ready: {message}")
+        else:
+            print(f"OpenAI API key set but verification failed: {message}")
+
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok"}
+    """Health check including whether AI-assisted XML recovery is available."""
+    return {"status": "ok", "ai": get_openai_status()}
 
 
 def _clean_result_response(result) -> XmlCleanResult:

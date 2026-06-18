@@ -14,13 +14,14 @@ The analysis layer scores each repair with confidence and produces a full audit 
 from __future__ import annotations
 
 import json
-import os
 import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from datetime import datetime
 
 import httpx
+
+from app.config import get_settings
 
 from app.xml_parser import (
     REQUIRED_FIELDS,
@@ -280,12 +281,12 @@ def _regex_extract_entries(raw_text: str) -> list[dict[str, str]]:
 
 def _ai_extract_entries(raw_text: str) -> list[dict[str, str]] | None:
     """
-    Optional AI-assisted recovery for severely malformed XML.
+    AI-assisted recovery for severely malformed XML.
 
-    Requires OPENAI_API_KEY. Returns None when AI is unavailable or fails.
+    Uses OPENAI_API_KEY from the environment. Returns None when AI is unavailable or fails.
     """
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
+    settings = get_settings().openai
+    if not settings.is_configured:
         return None
 
     prompt = (
@@ -299,9 +300,9 @@ def _ai_extract_entries(raw_text: str) -> list[dict[str, str]] | None:
     try:
         response = httpx.post(
             "https://api.openai.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}"},
+            headers={"Authorization": f"Bearer {settings.api_key}"},
             json={
-                "model": os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
+                "model": settings.model,
                 "messages": [
                     {"role": "system", "content": "You extract structured schedule data and return valid JSON only."},
                     {"role": "user", "content": prompt},
@@ -320,6 +321,14 @@ def _ai_extract_entries(raw_text: str) -> list[dict[str, str]] | None:
     except Exception:
         return None
     return None
+
+
+def _entries_missing_fields(entries: list[dict[str, str]]) -> bool:
+    """Return True if any entry is missing required dispatch fields."""
+    for entry in entries:
+        if REQUIRED_FIELDS - {k for k, v in entry.items() if str(v).strip()}:
+            return True
+    return False
 
 
 def _extract_raw_entries(content: bytes | str) -> tuple[list[dict[str, str]], str, list[str]]:
@@ -347,15 +356,23 @@ def _extract_raw_entries(content: bytes | str) -> tuple[list[dict[str, str]], st
 
     # Fallback: regex extraction for broken but readable XML.
     regex_entries = _regex_extract_entries(text)
-    if regex_entries:
+    if regex_entries and not _entries_missing_fields(regex_entries):
         errors.append("Used regex fallback parser due to malformed XML structure.")
         return regex_entries, "regex", errors
 
-    # Optional AI recovery.
-    ai_entries = _ai_extract_entries(text)
-    if ai_entries:
-        errors.append("Used AI-assisted parser to recover schedule entries.")
-        return ai_entries, "ai", errors
+    # AI recovery when XML is broken or regex produced incomplete entries.
+    if get_settings().openai.is_configured:
+        ai_entries = _ai_extract_entries(text)
+        if ai_entries:
+            note = "Used AI-assisted parser to recover schedule entries."
+            if regex_entries:
+                note = "AI-assisted parser replaced incomplete regex extraction."
+            errors.append(note)
+            return ai_entries, "ai", errors
+
+    if regex_entries:
+        errors.append("Used regex fallback parser (some entries may be incomplete).")
+        return regex_entries, "regex", errors
 
     errors.append("Could not extract any schedule entries from input.")
     return [], "none", errors

@@ -90,7 +90,7 @@ curl -X POST http://localhost:8000/api/clean-xml/json \
 
 The web dashboard includes an **XML Repair** tab for pasting raw XML, viewing the repair report, and copying cleaned output.
 
-Optional AI-assisted recovery for badly malformed XML is enabled when `OPENAI_API_KEY` is set.
+Optional AI-assisted recovery for badly malformed XML runs automatically when `OPENAI_API_KEY` is set (see `.env.example`). Check status at `GET /api/health`.
 
 ## API Endpoints
 
