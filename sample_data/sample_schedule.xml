@@ -1,297 +1,326 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schedules>
+  <!-- Ketchikan, Alaska — June 2026 port schedule (City of Ketchikan / CLAA berthing calendar) -->
   <schedule>
-    <date_header>Thursday 6/4 - 6 ships</date_header>
-    <ship>Symphony of the Seas</ship>
-    <checkin_time>7:00 AM</checkin_time>
-    <return_time>4:30 PM</return_time>
-    <boat_codes>CPT-A / OP-12</boat_codes>
-  </schedule>
-  <schedule>
-    <date_header>Thursday 6/4 - 6 ships</date_header>
-    <ship>Carnival Horizon</ship>
-    <checkin_time>8:00 AM</checkin_time>
+    <date_header>Thursday 6/4 - 5 ships</date_header>
+    <ship>Brilliant Lady</ship>
+    <checkin_time>9:00 AM</checkin_time>
     <return_time>5:00 PM</return_time>
-    <boat_codes>CPT-B</boat_codes>
-  </schedule>
-  <schedule>
-    <date_header>Thursday 6/4 - 6 ships</date_header>
-    <ship>Norwegian Escape</ship>
-    <checkin_time>7:30 AM</checkin_time>
-    <return_time>4:00 PM</return_time>
     <boat_codes>CPT-A</boat_codes>
   </schedule>
   <schedule>
-    <date_header>Thursday 6/4 - 6 ships</date_header>
-    <ship>MSC Seascape</ship>
-    <checkin_time>9:00 AM</checkin_time>
-    <return_time>5:30 PM</return_time>
-    <boat_codes>OP-07</boat_codes>
-  </schedule>
-  <schedule>
-    <date_header>Thursday 6/4 - 6 ships</date_header>
-    <ship>Celebrity Beyond</ship>
-    <checkin_time>8:30 AM</checkin_time>
-    <return_time>4:45 PM</return_time>
-    <boat_codes>CPT-C</boat_codes>
-  </schedule>
-  <schedule>
-    <date_header>Thursday 6/4 - 6 ships</date_header>
-    <ship>Disney Wish</ship>
-    <checkin_time>7:15 AM</checkin_time>
-    <return_time>3:45 PM</return_time>
+    <date_header>Thursday 6/4 - 5 ships</date_header>
+    <ship>Disney Wonder</ship>
+    <checkin_time>11:00 AM</checkin_time>
+    <return_time>7:00 PM</return_time>
     <boat_codes>CPT-B</boat_codes>
   </schedule>
   <schedule>
-    <date_header>Friday 6/5 - 5 ships</date_header>
-    <ship>Harmony of the Seas</ship>
-    <checkin_time>7:00 AM</checkin_time>
-    <return_time>4:30 PM</return_time>
-    <boat_codes>CPT-A / OP-12</boat_codes>
-  </schedule>
-  <schedule>
-    <date_header>Friday 6/5 - 5 ships</date_header>
-    <ship>Carnival Celebration</ship>
-    <checkin_time>8:15 AM</checkin_time>
-    <return_time>5:15 PM</return_time>
-    <boat_codes>CPT-B</boat_codes>
-  </schedule>
-  <schedule>
-    <date_header>Friday 6/5 - 5 ships</date_header>
-    <ship>Norwegian Prima</ship>
-    <checkin_time>7:45 AM</checkin_time>
-    <return_time>4:15 PM</return_time>
+    <date_header>Thursday 6/4 - 5 ships</date_header>
+    <ship>Riviera</ship>
+    <checkin_time>10:00 AM</checkin_time>
+    <return_time>6:00 PM</return_time>
     <boat_codes>CPT-C</boat_codes>
   </schedule>
   <schedule>
-    <date_header>Friday 6/5 - 5 ships</date_header>
-    <ship>MSC Meraviglia</ship>
-    <checkin_time>9:00 AM</checkin_time>
-    <return_time>5:00 PM</return_time>
-    <boat_codes>OP-07</boat_codes>
-  </schedule>
-  <schedule>
-    <date_header>Friday 6/5 - 5 ships</date_header>
-    <ship>Celebrity Apex</ship>
+    <date_header>Thursday 6/4 - 5 ships</date_header>
+    <ship>Silver Moon</ship>
     <checkin_time>8:00 AM</checkin_time>
-    <return_time>4:30 PM</return_time>
+    <return_time>4:00 PM</return_time>
+    <boat_codes>CPT-D</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Thursday 6/4 - 5 ships</date_header>
+    <ship>Viking Venus</ship>
+    <checkin_time>8:00 AM</checkin_time>
+    <return_time>3:00 PM</return_time>
+    <boat_codes>CPT-E</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Friday 6/5 - 5 ships</date_header>
+    <ship>Carnival Spirit</ship>
+    <checkin_time>7:00 AM</checkin_time>
+    <return_time>1:00 PM</return_time>
     <boat_codes>CPT-A</boat_codes>
   </schedule>
   <schedule>
-    <date_header>Saturday 6/6 - 4 ships</date_header>
-    <ship>Icon of the Seas</ship>
+    <date_header>Friday 6/5 - 5 ships</date_header>
+    <ship>Celebrity Edge</ship>
     <checkin_time>7:00 AM</checkin_time>
-    <return_time>5:00 PM</return_time>
-    <boat_codes>CPT-A / OP-12</boat_codes>
-  </schedule>
-  <schedule>
-    <date_header>Saturday 6/6 - 4 ships</date_header>
-    <ship>Carnival Vista</ship>
-    <checkin_time>8:00 AM</checkin_time>
-    <return_time>4:45 PM</return_time>
+    <return_time>4:00 PM</return_time>
     <boat_codes>CPT-B</boat_codes>
   </schedule>
   <schedule>
-    <date_header>Saturday 6/6 - 4 ships</date_header>
-    <ship>Royal Caribbean Odyssey</ship>
-    <checkin_time>7:30 AM</checkin_time>
-    <return_time>4:00 PM</return_time>
+    <date_header>Friday 6/5 - 5 ships</date_header>
+    <ship>Celebrity Summit</ship>
+    <checkin_time>7:00 AM</checkin_time>
+    <return_time>3:00 PM</return_time>
     <boat_codes>CPT-C</boat_codes>
   </schedule>
   <schedule>
-    <date_header>Saturday 6/6 - 4 ships</date_header>
-    <ship>Disney Dream</ship>
-    <checkin_time>7:15 AM</checkin_time>
+    <date_header>Friday 6/5 - 5 ships</date_header>
+    <ship>Emerald Princess</ship>
+    <checkin_time>7:30 AM</checkin_time>
     <return_time>3:30 PM</return_time>
-    <boat_codes>CPT-B</boat_codes>
+    <boat_codes>CPT-D</boat_codes>
   </schedule>
   <schedule>
-    <date_header>Sunday 6/7 - 3 ships</date_header>
-    <ship>Wonder of the Seas</ship>
-    <checkin_time>7:00 AM</checkin_time>
-    <return_time>4:30 PM</return_time>
+    <date_header>Friday 6/5 - 5 ships</date_header>
+    <ship>Wilderness Discoverer</ship>
+    <checkin_time>5:00 AM</checkin_time>
+    <return_time>7:00 PM</return_time>
+    <boat_codes>CPT-E</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Saturday 6/6 - 5 ships</date_header>
+    <ship>Discovery Princess</ship>
+    <checkin_time>6:00 AM</checkin_time>
+    <return_time>2:00 PM</return_time>
     <boat_codes>CPT-A</boat_codes>
   </schedule>
   <schedule>
-    <date_header>Sunday 6/7 - 3 ships</date_header>
-    <ship>Carnival Magic</ship>
-    <checkin_time>8:30 AM</checkin_time>
+    <date_header>Saturday 6/6 - 5 ships</date_header>
+    <ship>Island Princess</ship>
+    <checkin_time>10:00 AM</checkin_time>
+    <return_time>6:00 PM</return_time>
+    <boat_codes>CPT-B</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Saturday 6/6 - 5 ships</date_header>
+    <ship>Queen Elizabeth</ship>
+    <checkin_time>11:30 AM</checkin_time>
+    <return_time>7:00 PM</return_time>
+    <boat_codes>CPT-C</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Saturday 6/6 - 5 ships</date_header>
+    <ship>Star Seeker</ship>
+    <checkin_time>2:30 PM</checkin_time>
+    <return_time>9:00 PM</return_time>
+    <boat_codes>CPT-D</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Saturday 6/6 - 5 ships</date_header>
+    <ship>Zaandam</ship>
+    <checkin_time>11:00 AM</checkin_time>
+    <return_time>7:00 PM</return_time>
+    <boat_codes>CPT-E</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Sunday 6/7 - 5 ships</date_header>
+    <ship>Carnival Miracle</ship>
+    <checkin_time>7:00 AM</checkin_time>
+    <return_time>1:00 PM</return_time>
+    <boat_codes>CPT-A</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Sunday 6/7 - 5 ships</date_header>
+    <ship>Disney Magic</ship>
+    <checkin_time>11:00 AM</checkin_time>
+    <return_time>7:00 PM</return_time>
+    <boat_codes>CPT-B</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Sunday 6/7 - 5 ships</date_header>
+    <ship>Star Princess</ship>
+    <checkin_time>6:00 AM</checkin_time>
+    <return_time>3:00 PM</return_time>
+    <boat_codes>CPT-C</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Sunday 6/7 - 5 ships</date_header>
+    <ship>Viking Orion</ship>
+    <checkin_time>10:00 AM</checkin_time>
+    <return_time>10:00 PM</return_time>
+    <boat_codes>CPT-D</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Sunday 6/7 - 5 ships</date_header>
+    <ship>Westerdam</ship>
+    <checkin_time>6:30 AM</checkin_time>
+    <return_time>3:00 PM</return_time>
+    <boat_codes>CPT-E</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Monday 6/8 - 4 ships</date_header>
+    <ship>Azamara Pursuit</ship>
+    <checkin_time>7:00 AM</checkin_time>
+    <return_time>9:00 PM</return_time>
+    <boat_codes>CPT-A</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Monday 6/8 - 4 ships</date_header>
+    <ship>MSC Poesia</ship>
+    <checkin_time>7:00 AM</checkin_time>
     <return_time>5:00 PM</return_time>
     <boat_codes>CPT-B</boat_codes>
   </schedule>
   <schedule>
-    <date_header>Sunday 6/7 - 3 ships</date_header>
+    <date_header>Monday 6/8 - 4 ships</date_header>
+    <ship>Ruby Princess</ship>
+    <checkin_time>8:00 AM</checkin_time>
+    <return_time>6:00 PM</return_time>
+    <boat_codes>CPT-C</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Monday 6/8 - 4 ships</date_header>
+    <ship>Viking Venus</ship>
+    <checkin_time>10:00 AM</checkin_time>
+    <return_time>5:00 PM</return_time>
+    <boat_codes>CPT-D</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Tuesday 6/9 - 5 ships</date_header>
+    <ship>Eurodam</ship>
+    <checkin_time>6:30 AM</checkin_time>
+    <return_time>1:00 PM</return_time>
+    <boat_codes>CPT-A</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Tuesday 6/9 - 5 ships</date_header>
+    <ship>Grand Princess</ship>
+    <checkin_time>10:00 AM</checkin_time>
+    <return_time>6:00 PM</return_time>
+    <boat_codes>CPT-B</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Tuesday 6/9 - 5 ships</date_header>
+    <ship>Koningsdam</ship>
+    <checkin_time>11:00 AM</checkin_time>
+    <return_time>7:00 PM</return_time>
+    <boat_codes>CPT-C</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Tuesday 6/9 - 5 ships</date_header>
+    <ship>Norwegian Bliss</ship>
+    <checkin_time>6:00 AM</checkin_time>
+    <return_time>1:15 PM</return_time>
+    <boat_codes>CPT-D</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Tuesday 6/9 - 5 ships</date_header>
+    <ship>Royal Princess</ship>
+    <checkin_time>7:00 AM</checkin_time>
+    <return_time>1:15 PM</return_time>
+    <boat_codes>CPT-E</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Wednesday 6/10 - 6 ships</date_header>
+    <ship>Celebrity Solstice</ship>
+    <checkin_time>1:30 PM</checkin_time>
+    <return_time>8:00 PM</return_time>
+    <boat_codes>CPT-A</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Wednesday 6/10 - 6 ships</date_header>
+    <ship>Island Princess</ship>
+    <checkin_time>6:00 AM</checkin_time>
+    <return_time>2:00 PM</return_time>
+    <boat_codes>CPT-B</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Wednesday 6/10 - 6 ships</date_header>
+    <ship>Nieuw Amsterdam</ship>
+    <checkin_time>11:00 AM</checkin_time>
+    <return_time>7:00 PM</return_time>
+    <boat_codes>CPT-C</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Wednesday 6/10 - 6 ships</date_header>
+    <ship>Noordam</ship>
+    <checkin_time>7:00 AM</checkin_time>
+    <return_time>1:00 PM</return_time>
+    <boat_codes>CPT-D</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Wednesday 6/10 - 6 ships</date_header>
     <ship>Norwegian Encore</ship>
-    <checkin_time>7:45 AM</checkin_time>
-    <return_time>4:15 PM</return_time>
-    <boat_codes>CPT-C</boat_codes>
-  </schedule>
-  <schedule>
-    <date_header>Monday 6/8 - 4 ships</date_header>
-    <ship>Symphony of the Seas</ship>
     <checkin_time>7:00 AM</checkin_time>
-    <return_time>4:30 PM</return_time>
-    <boat_codes>CPT-A / OP-12</boat_codes>
+    <return_time>1:15 PM</return_time>
+    <boat_codes>CPT-E</boat_codes>
   </schedule>
   <schedule>
-    <date_header>Monday 6/8 - 4 ships</date_header>
-    <ship>Carnival Horizon</ship>
-    <checkin_time>8:00 AM</checkin_time>
-    <return_time>5:00 PM</return_time>
-    <boat_codes>CPT-B</boat_codes>
+    <date_header>Wednesday 6/10 - 6 ships</date_header>
+    <ship>Serenade of the Seas</ship>
+    <checkin_time>10:00 AM</checkin_time>
+    <return_time>7:00 PM</return_time>
+    <boat_codes>CPT-F</boat_codes>
   </schedule>
   <schedule>
-    <date_header>Monday 6/8 - 4 ships</date_header>
-    <ship>MSC Seascape</ship>
+    <date_header>Thursday 6/11 - 5 ships</date_header>
+    <ship>Brilliant Lady</ship>
     <checkin_time>9:00 AM</checkin_time>
-    <return_time>5:30 PM</return_time>
-    <boat_codes>OP-07</boat_codes>
-  </schedule>
-  <schedule>
-    <date_header>Monday 6/8 - 4 ships</date_header>
-    <ship>Celebrity Beyond</ship>
-    <checkin_time>8:30 AM</checkin_time>
-    <return_time>4:45 PM</return_time>
-    <boat_codes>CPT-C</boat_codes>
-  </schedule>
-  <schedule>
-    <date_header>Tuesday 6/9 - 5 ships</date_header>
-    <ship>Harmony of the Seas</ship>
-    <checkin_time>7:00 AM</checkin_time>
-    <return_time>4:30 PM</return_time>
+    <return_time>5:00 PM</return_time>
     <boat_codes>CPT-A</boat_codes>
   </schedule>
   <schedule>
-    <date_header>Tuesday 6/9 - 5 ships</date_header>
-    <ship>Carnival Celebration</ship>
-    <checkin_time>8:15 AM</checkin_time>
-    <return_time>5:15 PM</return_time>
+    <date_header>Thursday 6/11 - 5 ships</date_header>
+    <ship>Disney Wonder</ship>
+    <checkin_time>11:00 AM</checkin_time>
+    <return_time>7:00 PM</return_time>
     <boat_codes>CPT-B</boat_codes>
   </schedule>
   <schedule>
-    <date_header>Tuesday 6/9 - 5 ships</date_header>
-    <ship>Norwegian Escape</ship>
-    <checkin_time>7:30 AM</checkin_time>
+    <date_header>Thursday 6/11 - 5 ships</date_header>
+    <ship>Norwegian Jade</ship>
+    <checkin_time>11:00 AM</checkin_time>
+    <return_time>8:00 PM</return_time>
+    <boat_codes>CPT-C</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Thursday 6/11 - 5 ships</date_header>
+    <ship>Queen Elizabeth</ship>
+    <checkin_time>9:00 AM</checkin_time>
     <return_time>4:00 PM</return_time>
+    <boat_codes>CPT-D</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Thursday 6/11 - 5 ships</date_header>
+    <ship>Silver Whisper</ship>
+    <checkin_time>8:00 AM</checkin_time>
+    <return_time>4:30 PM</return_time>
+    <boat_codes>CPT-E</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Friday 6/12 - 6 ships</date_header>
+    <ship>Carnival Luminosa</ship>
+    <checkin_time>9:00 AM</checkin_time>
+    <return_time>6:00 PM</return_time>
     <boat_codes>CPT-A</boat_codes>
   </schedule>
   <schedule>
-    <date_header>Tuesday 6/9 - 5 ships</date_header>
-    <ship>Disney Wish</ship>
-    <checkin_time>7:15 AM</checkin_time>
-    <return_time>3:45 PM</return_time>
-    <boat_codes>CPT-B</boat_codes>
-  </schedule>
-  <schedule>
-    <date_header>Tuesday 6/9 - 5 ships</date_header>
-    <ship>Celebrity Apex</ship>
-    <checkin_time>8:00 AM</checkin_time>
-    <return_time>4:30 PM</return_time>
-    <boat_codes>CPT-C</boat_codes>
-  </schedule>
-  <schedule>
-    <date_header>Wednesday 6/10 - 4 ships</date_header>
-    <ship>Icon of the Seas</ship>
+    <date_header>Friday 6/12 - 6 ships</date_header>
+    <ship>Carnival Spirit</ship>
     <checkin_time>7:00 AM</checkin_time>
-    <return_time>5:00 PM</return_time>
-    <boat_codes>CPT-A / OP-12</boat_codes>
-  </schedule>
-  <schedule>
-    <date_header>Wednesday 6/10 - 4 ships</date_header>
-    <ship>Carnival Vista</ship>
-    <checkin_time>8:00 AM</checkin_time>
-    <return_time>4:45 PM</return_time>
+    <return_time>1:00 PM</return_time>
     <boat_codes>CPT-B</boat_codes>
   </schedule>
   <schedule>
-    <date_header>Wednesday 6/10 - 4 ships</date_header>
-    <ship>Norwegian Prima</ship>
-    <checkin_time>7:45 AM</checkin_time>
-    <return_time>4:15 PM</return_time>
-    <boat_codes>CPT-C</boat_codes>
-  </schedule>
-  <schedule>
-    <date_header>Wednesday 6/10 - 4 ships</date_header>
-    <ship>MSC Meraviglia</ship>
-    <checkin_time>9:00 AM</checkin_time>
-    <return_time>5:00 PM</return_time>
-    <boat_codes>OP-07</boat_codes>
-  </schedule>
-  <schedule>
-    <date_header>Thursday 6/11 - 6 ships</date_header>
-    <ship>Symphony of the Seas</ship>
+    <date_header>Friday 6/12 - 6 ships</date_header>
+    <ship>Celebrity Edge</ship>
     <checkin_time>7:00 AM</checkin_time>
-    <return_time>4:30 PM</return_time>
-    <boat_codes>CPT-A / OP-12</boat_codes>
-  </schedule>
-  <schedule>
-    <date_header>Thursday 6/11 - 6 ships</date_header>
-    <ship>Carnival Horizon</ship>
-    <checkin_time>8:00 AM</checkin_time>
-    <return_time>5:00 PM</return_time>
-    <boat_codes>CPT-B</boat_codes>
-  </schedule>
-  <schedule>
-    <date_header>Thursday 6/11 - 6 ships</date_header>
-    <ship>Norwegian Escape</ship>
-    <checkin_time>7:30 AM</checkin_time>
     <return_time>4:00 PM</return_time>
-    <boat_codes>CPT-A</boat_codes>
-  </schedule>
-  <schedule>
-    <date_header>Thursday 6/11 - 6 ships</date_header>
-    <ship>MSC Seascape</ship>
-    <checkin_time>9:00 AM</checkin_time>
-    <return_time>5:30 PM</return_time>
-    <boat_codes>OP-07</boat_codes>
-  </schedule>
-  <schedule>
-    <date_header>Thursday 6/11 - 6 ships</date_header>
-    <ship>Celebrity Beyond</ship>
-    <checkin_time>8:30 AM</checkin_time>
-    <return_time>4:45 PM</return_time>
     <boat_codes>CPT-C</boat_codes>
   </schedule>
   <schedule>
-    <date_header>Thursday 6/11 - 6 ships</date_header>
-    <ship>Disney Wish</ship>
-    <checkin_time>7:15 AM</checkin_time>
-    <return_time>3:45 PM</return_time>
-    <boat_codes>CPT-B</boat_codes>
+    <date_header>Friday 6/12 - 6 ships</date_header>
+    <ship>Emerald Princess</ship>
+    <checkin_time>7:30 AM</checkin_time>
+    <return_time>3:30 PM</return_time>
+    <boat_codes>CPT-D</boat_codes>
   </schedule>
   <schedule>
-    <date_header>Friday 6/12 - 5 ships</date_header>
-    <ship>Harmony of the Seas</ship>
+    <date_header>Friday 6/12 - 6 ships</date_header>
+    <ship>Ovation of the Seas</ship>
     <checkin_time>7:00 AM</checkin_time>
-    <return_time>4:30 PM</return_time>
-    <boat_codes>CPT-A / OP-12</boat_codes>
+    <return_time>6:00 PM</return_time>
+    <boat_codes>CPT-E</boat_codes>
   </schedule>
   <schedule>
-    <date_header>Friday 6/12 - 5 ships</date_header>
-    <ship>Carnival Celebration</ship>
-    <checkin_time>8:15 AM</checkin_time>
-    <return_time>5:15 PM</return_time>
-    <boat_codes>CPT-B</boat_codes>
-  </schedule>
-  <schedule>
-    <date_header>Friday 6/12 - 5 ships</date_header>
-    <ship>Norwegian Prima</ship>
-    <checkin_time>7:45 AM</checkin_time>
-    <return_time>4:15 PM</return_time>
-    <boat_codes>CPT-C</boat_codes>
-  </schedule>
-  <schedule>
-    <date_header>Friday 6/12 - 5 ships</date_header>
-    <ship>MSC Meraviglia</ship>
-    <checkin_time>9:00 AM</checkin_time>
-    <return_time>5:00 PM</return_time>
-    <boat_codes>OP-07</boat_codes>
-  </schedule>
-  <schedule>
-    <date_header>Friday 6/12 - 5 ships</date_header>
-    <ship>Celebrity Apex</ship>
-    <checkin_time>8:00 AM</checkin_time>
-    <return_time>4:30 PM</return_time>
-    <boat_codes>CPT-A</boat_codes>
+    <date_header>Friday 6/12 - 6 ships</date_header>
+    <ship>Seabourn Encore</ship>
+    <checkin_time>7:00 AM</checkin_time>
+    <return_time>3:00 PM</return_time>
+    <boat_codes>CPT-F</boat_codes>
   </schedule>
 </schedules>

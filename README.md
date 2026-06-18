@@ -46,15 +46,15 @@ Example:
 <?xml version="1.0" encoding="UTF-8"?>
 <schedules>
   <schedule>
-    <date_header>Thursday 6/4 - 6 ships</date_header>
-    <ship>Symphony of the Seas</ship>
-    <checkin_time>7:00 AM</checkin_time>
-    <return_time>4:30 PM</return_time>
-    <boat_codes>CPT-A / OP-12</boat_codes>
+    <date_header>Thursday 6/4 - 5 ships</date_header>
+    <ship>Norwegian Bliss</ship>
+    <checkin_time>6:00 AM</checkin_time>
+    <return_time>1:15 PM</return_time>
+    <boat_codes>CPT-A</boat_codes>
   </schedule>
   <schedule>
     <date_header>Friday 6/5 - 5 ships</date_header>
-    <ship>Carnival Horizon</ship>
+    <ship>Eurodam</ship>
     <checkin_time>8:00 AM</checkin_time>
     <return_time>5:00 PM</return_time>
     <boat_codes>CPT-B</boat_codes>
