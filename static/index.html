@@ -2,13 +2,12 @@
 <!--
   Captain Schedule Predictor — web dashboard.
 
-  Single-page app that uploads dispatch XML files and displays:
-    - Future captain shift predictions
-    - Per-captain overview cards
-    - Busy-day calendar (passenger volume estimates)
-    - Upload history and raw stored schedules
+  Landing workflow:
+    1. Paste or load raw dispatch XML
+    2. Clean & repair (times, boat field fixes, AI recovery)
+    3. Send cleaned XML to the prediction generator
 
-  All data is fetched from the FastAPI backend via static/app.js.
+  Additional tabs: predictions, captain overview, calendar, history, schedules.
 -->
 <html lang="en">
 <head>
@@ -28,7 +27,7 @@
           <div class="brand-icon">⚓</div>
           <div>
             <h1>Captain Schedule Predictor</h1>
-            <p class="subtitle">Upload dispatch XML · Learn patterns · Forecast captain work days</p>
+            <p class="subtitle">Clean dispatch XML · Send to predictions · Forecast captain work days</p>
           </div>
         </div>
         <div class="stats-bar" id="statsBar">
@@ -41,18 +40,54 @@
     </header>
 
     <main class="main">
-      <section class="card upload-section">
-        <h2>Upload Schedule XML</h2>
-        <p class="card-desc">Expected elements per <code>&lt;schedule&gt;</code>: <code>date_header</code>, <code>ship</code>, <code>checkin_time</code>, <code>return_time</code>, <code>boat_codes</code></p>
-        <div class="upload-zone" id="uploadZone">
-          <input type="file" id="fileInput" accept=".xml,text/xml,application/xml" hidden />
-          <div class="upload-content">
-            <div class="upload-icon">📄</div>
-            <p>Drag & drop an XML file here, or <button type="button" class="link-btn" id="browseBtn">browse files</button></p>
-            <p class="upload-hint">Data is saved to the database and used to improve future predictions</p>
+      <!-- Step 1: Clean XML — always the first thing on the page -->
+      <section class="card hero-section" id="cleanSection">
+        <div class="hero-header">
+          <div>
+            <h2>Clean Dispatch XML</h2>
+            <p class="card-desc">Paste raw XML below, repair times and boat fields, then send the cleaned file to the prediction generator</p>
           </div>
+          <div id="aiStatusBadge" class="ai-badge">Checking AI status...</div>
         </div>
-        <div id="uploadResult" class="upload-result hidden"></div>
+
+        <label class="field-label" for="rawXmlInput">Raw XML input</label>
+        <textarea id="rawXmlInput" class="xml-input" placeholder="Paste raw dispatch XML here (Ctrl+V / Cmd+V)..."></textarea>
+
+        <div class="repair-actions">
+          <button type="button" class="btn" id="cleanXmlBtn">Clean &amp; Analyze</button>
+          <button type="button" class="btn secondary" id="pasteXmlBtn">Paste from Clipboard</button>
+          <input type="file" id="repairFileInput" accept=".xml,text/xml,application/xml" hidden />
+          <button type="button" class="btn secondary" id="loadRepairFileBtn">Load XML File</button>
+        </div>
+
+        <div id="repairSummary" class="repair-summary hidden"></div>
+
+        <div class="table-wrap repair-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Field</th>
+                <th>Issue</th>
+                <th>Before</th>
+                <th>After</th>
+                <th>Confidence</th>
+              </tr>
+            </thead>
+            <tbody id="repairsBody">
+              <tr><td colspan="6" class="empty">Paste XML above and click Clean &amp; Analyze</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <label class="field-label" for="cleanedXmlOutput">Cleaned XML output</label>
+        <textarea id="cleanedXmlOutput" class="xml-input xml-output-editable" readonly placeholder="Cleaned XML will appear here — copy or send to predictions"></textarea>
+
+        <div class="repair-actions output-actions">
+          <button type="button" class="btn secondary" id="copyCleanXmlBtn" disabled>Copy Cleaned XML</button>
+          <button type="button" class="btn primary-action" id="pushPredictionsBtn" disabled>Send to Prediction Generator →</button>
+        </div>
+        <div id="pushResult" class="upload-result hidden"></div>
       </section>
 
       <div class="controls card">
@@ -88,7 +123,6 @@
         <button class="tab active" data-tab="predictions">Predictions</button>
         <button class="tab" data-tab="captains">Captain Overview</button>
         <button class="tab" data-tab="calendar">Busy Calendar</button>
-        <button class="tab" data-tab="repair">XML Repair</button>
         <button class="tab" data-tab="history">Uploaded History</button>
         <button class="tab" data-tab="schedules">Raw Schedules</button>
       </div>
@@ -112,7 +146,7 @@
                 </tr>
               </thead>
               <tbody id="predictionsBody">
-                <tr><td colspan="8" class="empty">Upload an XML file to generate predictions</td></tr>
+                <tr><td colspan="8" class="empty">Clean XML above and click Send to Prediction Generator</td></tr>
               </tbody>
             </table>
           </div>
@@ -134,41 +168,6 @@
           <h2>Busy Day Calendar</h2>
           <p class="card-desc">Estimated passenger volume from cruise ship capacity data — darker = busier port day</p>
           <div class="calendar-grid" id="calendarGrid"></div>
-        </div>
-      </section>
-
-      <section class="tab-panel" id="panel-repair">
-        <div class="card">
-          <h2>XML Repair &amp; Analysis</h2>
-          <p class="card-desc">Paste raw XML to re-parse, convert times to 24-hour <code>HH:MM</code>, and repair boat fields corrupted with <code>15am:</code>, <code>30am:</code>, <code>15pm:</code>, or <code>30pm:</code> prefixes</p>
-          <div id="aiStatusBadge" class="ai-badge">Checking AI status...</div>
-          <textarea id="rawXmlInput" class="xml-input" placeholder="Paste raw dispatch XML here..."></textarea>
-          <div class="repair-actions">
-            <button type="button" class="btn" id="cleanXmlBtn">Clean &amp; Analyze XML</button>
-            <button type="button" class="btn secondary" id="copyCleanXmlBtn" disabled>Copy Cleaned XML</button>
-            <input type="file" id="repairFileInput" accept=".xml,text/xml,application/xml" hidden />
-            <button type="button" class="btn secondary" id="loadRepairFileBtn">Load XML File</button>
-          </div>
-          <div id="repairSummary" class="repair-summary hidden"></div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Field</th>
-                  <th>Issue</th>
-                  <th>Before</th>
-                  <th>After</th>
-                  <th>Confidence</th>
-                </tr>
-              </thead>
-              <tbody id="repairsBody">
-                <tr><td colspan="6" class="empty">No repairs yet — paste XML and click Clean</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <h3 class="subheading">Cleaned XML Output</h3>
-          <pre id="cleanedXmlOutput" class="xml-output">Cleaned XML will appear here...</pre>
         </div>
       </section>
 
@@ -219,7 +218,7 @@
     </main>
 
     <footer class="footer">
-      <p>Captain Schedule Predictor · Learns from every XML upload · Ship capacity data from public cruise registries</p>
+      <p>Captain Schedule Predictor · Clean XML first · AI-assisted recovery · Ship capacity data from public cruise registries</p>
     </footer>
   </div>
 

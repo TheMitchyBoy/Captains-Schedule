@@ -261,6 +261,25 @@ select {
   background: var(--border);
 }
 
+.btn.primary-action {
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  font-weight: 600;
+}
+
+.btn.primary-action:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1d4ed8, #6d28d9);
+}
+
+.btn.primary-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .tabs {
   display: flex;
   gap: 0.35rem;
@@ -480,6 +499,49 @@ tr:hover td {
 
 .repair-summary.hidden {
   display: none;
+}
+
+.hero-section {
+  border-color: rgba(59, 130, 246, 0.35);
+}
+
+.hero-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+}
+
+.field-label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0.75rem 0 0.35rem;
+}
+
+.xml-output-editable {
+  min-height: 200px;
+  background: rgba(34, 197, 94, 0.05);
+  border-color: rgba(34, 197, 94, 0.25);
+}
+
+.xml-output-editable:not([readonly]) {
+  background: var(--surface-2);
+  border-color: var(--border);
+}
+
+.output-actions {
+  margin-top: 0.75rem;
+}
+
+.repair-table-wrap {
+  margin: 1rem 0;
+  max-height: 240px;
+  overflow-y: auto;
 }
 
 .ai-badge {
