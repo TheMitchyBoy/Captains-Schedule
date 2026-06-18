@@ -27,6 +27,53 @@ from app.schemas import (
 )
 from app.ship_data import lookup_ship_online, seed_ship_capacities
 
+
+def _resolve_upload_filename(filename: str | None, content_type: str | None) -> str:
+    if filename and filename.strip():
+        return filename.strip()
+    if content_type and "csv" in content_type.lower():
+        return "upload.csv"
+    return "upload.csv"
+
+
+def _looks_like_csv(filename: str | None, content_type: str | None, content: bytes) -> bool:
+    if filename and filename.strip():
+        lower = filename.strip().lower()
+        if lower.endswith((".csv", ".txt", ".tsv")):
+            return True
+
+    if content_type:
+        ct = content_type.lower().split(";")[0].strip()
+        if ct in (
+            "text/csv",
+            "application/csv",
+            "text/plain",
+            "application/vnd.ms-excel",
+            "application/octet-stream",
+        ):
+            return True
+
+    if not content:
+        return False
+
+    try:
+        sample = content[:4096].decode("utf-8-sig", errors="ignore")
+    except Exception:
+        return False
+
+    if not sample.strip():
+        return False
+
+    first_line = sample.splitlines()[0] if sample.splitlines() else ""
+    # Accept comma, tab, or semicolon delimited files with expected headers.
+    for delimiter in (",", "\t", ";"):
+        if delimiter in first_line and any(
+            col in first_line.lower() for col in ("date_header", "ship", "checkin", "boat")
+        ):
+            return True
+
+    return "," in first_line and "\n" in sample
+
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 app = FastAPI(
@@ -64,19 +111,23 @@ async def upload_csv(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
-    if not file.filename or not file.filename.lower().endswith(".csv"):
-        raise HTTPException(status_code=400, detail="Please upload a .csv file")
-
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
 
-    batch_id, imported, skipped, errors = import_schedules(db, content, file.filename)
+    filename = _resolve_upload_filename(file.filename, file.content_type)
+    if not _looks_like_csv(file.filename, file.content_type, content):
+        raise HTTPException(
+            status_code=400,
+            detail="Could not recognize file as CSV. Use a .csv file with columns: date_header, ship, checkin_time, return_time, boat_codes",
+        )
+
+    batch_id, imported, skipped, errors = import_schedules(db, content, filename)
     rebuild_patterns(db)
 
     return UploadResult(
         batch_id=batch_id,
-        filename=file.filename,
+        filename=filename,
         rows_imported=imported,
         rows_skipped=skipped,
         notes="; ".join(errors[:5]) if errors else None,

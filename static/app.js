@@ -218,12 +218,18 @@ async function uploadFile(file) {
   resultEl.classList.remove("hidden", "success", "error");
 
   const form = new FormData();
-  form.append("file", file);
+  const filename = file.name || "upload.csv";
+  form.append("file", file, filename);
 
   try {
     const res = await fetch(API + "/api/upload", { method: "POST", body: form });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "Upload failed");
+    if (!res.ok) {
+      const detail = Array.isArray(data.detail)
+        ? data.detail.map((d) => d.msg || d).join(", ")
+        : data.detail;
+      throw new Error(detail || "Upload failed");
+    }
 
     resultEl.classList.add("success");
     resultEl.innerHTML = `✓ Imported <strong>${data.rows_imported}</strong> rows from <strong>${data.filename}</strong>` +

@@ -95,10 +95,18 @@ def infer_reference_year(rows: list[dict]) -> int:
 
 def parse_csv_content(content: bytes, filename: str = "upload.csv") -> tuple[list[dict], list[str]]:
     errors: list[str] = []
-    try:
-        df = pd.read_csv(io.BytesIO(content))
-    except Exception as exc:
-        return [], [f"Could not read CSV: {exc}"]
+    df = None
+
+    for sep in (None, ",", "\t", ";"):
+        try:
+            df = pd.read_csv(io.BytesIO(content), sep=sep, engine="python" if sep else "c")
+            if df is not None and len(df.columns) >= len(REQUIRED_COLUMNS):
+                break
+        except Exception:
+            continue
+
+    if df is None or df.empty:
+        return [], ["Could not read CSV: unsupported format or empty file"]
 
     df = _normalize_columns(df)
     missing = REQUIRED_COLUMNS - set(df.columns)
