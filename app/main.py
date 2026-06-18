@@ -1,12 +1,13 @@
 from datetime import date
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.csv_parser import import_schedules
 from app.database import get_db, init_db
@@ -91,6 +92,19 @@ app.add_middleware(
 )
 
 
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    if isinstance(exc, StarletteHTTPException):
+        detail = exc.detail
+        if not isinstance(detail, str):
+            detail = str(detail)
+        return JSONResponse(status_code=exc.status_code, content={"detail": detail})
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Server error: {exc}"},
+    )
+
+
 @app.on_event("startup")
 def on_startup():
     init_db()
@@ -111,27 +125,39 @@ async def upload_csv(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
-    content = await file.read()
-    if not content:
-        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+    try:
+        content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty")
 
-    filename = _resolve_upload_filename(file.filename, file.content_type)
-    if not _looks_like_csv(file.filename, file.content_type, content):
-        raise HTTPException(
-            status_code=400,
-            detail="Could not recognize file as CSV. Use a .csv file with columns: date_header, ship, checkin_time, return_time, boat_codes",
+        filename = _resolve_upload_filename(file.filename, file.content_type)
+        if not _looks_like_csv(file.filename, file.content_type, content):
+            raise HTTPException(
+                status_code=400,
+                detail="Could not recognize file as CSV. Use a .csv file with columns: date_header, ship, checkin_time, return_time, boat_codes",
+            )
+
+        batch_id, imported, skipped, errors = import_schedules(db, content, filename)
+        rebuild_patterns(db)
+
+        if imported == 0 and skipped == 0:
+            detail = errors[0] if errors else "No valid rows could be imported from this CSV"
+            raise HTTPException(status_code=400, detail=detail)
+
+        return UploadResult(
+            batch_id=batch_id,
+            filename=filename,
+            rows_imported=imported,
+            rows_skipped=skipped,
+            notes="; ".join(errors[:5]) if errors else None,
         )
-
-    batch_id, imported, skipped, errors = import_schedules(db, content, filename)
-    rebuild_patterns(db)
-
-    return UploadResult(
-        batch_id=batch_id,
-        filename=filename,
-        rows_imported=imported,
-        rows_skipped=skipped,
-        notes="; ".join(errors[:5]) if errors else None,
-    )
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Upload failed: {exc}") from exc
 
 
 @app.get("/api/schedules", response_model=list[ScheduleEntryOut])

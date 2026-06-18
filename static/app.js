@@ -28,9 +28,24 @@ function confidenceBar(pct) {
   </div>`;
 }
 
+async function readErrorDetail(res) {
+  const contentType = res.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    const data = await res.json();
+    if (Array.isArray(data.detail)) {
+      return data.detail.map((d) => d.msg || d).join(", ");
+    }
+    return data.detail || `Request failed (${res.status})`;
+  }
+  const text = await res.text();
+  return text || `Request failed (${res.status})`;
+}
+
 async function fetchJSON(path) {
   const res = await fetch(API + path);
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) {
+    throw new Error(await readErrorDetail(res));
+  }
   return res.json();
 }
 
@@ -223,17 +238,17 @@ async function uploadFile(file) {
 
   try {
     const res = await fetch(API + "/api/upload", { method: "POST", body: form });
-    const data = await res.json();
     if (!res.ok) {
-      const detail = Array.isArray(data.detail)
-        ? data.detail.map((d) => d.msg || d).join(", ")
-        : data.detail;
-      throw new Error(detail || "Upload failed");
+      throw new Error(await readErrorDetail(res));
     }
+    const data = await res.json();
 
     resultEl.classList.add("success");
-    resultEl.innerHTML = `✓ Imported <strong>${data.rows_imported}</strong> rows from <strong>${data.filename}</strong>` +
-      (data.rows_skipped ? ` (${data.rows_skipped} updated)` : "") +
+    const summary = data.rows_imported
+      ? `✓ Imported <strong>${data.rows_imported}</strong> rows from <strong>${data.filename}</strong>`
+      : `✓ Updated <strong>${data.rows_skipped}</strong> existing rows from <strong>${data.filename}</strong>`;
+    resultEl.innerHTML = summary +
+      (data.rows_skipped && data.rows_imported ? ` (${data.rows_skipped} updated)` : "") +
       (data.notes ? `<br><small>${data.notes}</small>` : "");
 
     await refreshAll();
