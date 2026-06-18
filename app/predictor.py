@@ -8,6 +8,8 @@ Core approach:
   1. After each XML upload, aggregate historical shifts by (captain, weekday, ship, times)
   2. Compute confidence = how often this assignment occurs vs. all shifts for that captain on that weekday
   3. For each future date, apply matching weekday patterns and attach busy-day scores
+  4. Enforce scheduling constraints: one boat per ship at a time, no captain overlap,
+     alphabetical boat dispatch order, and 3-hour minimum turnaround between tours
 """
 
 from collections import defaultdict
@@ -17,6 +19,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models import CaptainPattern, ScheduleEntry
+from app.scheduler import ShiftCandidate, apply_scheduling_constraints
 from app.schemas import CaptainPrediction, CaptainSummary
 from app.ship_data import estimate_daily_passengers, get_ship_capacity
 
@@ -124,9 +127,11 @@ def predict_captain_schedule(
     """
     Generate future captain shift predictions for the next N days.
 
-    For each day, matches learned weekday patterns and attaches ship capacity
-    and busy-day scores. Optionally filters to a single boat_code and minimum
-    confidence threshold.
+    Raw pattern matches are filtered through scheduling constraints so that:
+      - Each boat serves only one cruise ship at a time
+      - Captains are never scheduled for overlapping tours
+      - Boats are assigned in alphabetical order when multiple are eligible
+      - At least 3 hours separate consecutive tours for the same boat
     """
     patterns = db.query(CaptainPattern).all()
     if not patterns:
@@ -136,7 +141,7 @@ def predict_captain_schedule(
         return []
 
     today = date.today()
-    predictions: list[CaptainPrediction] = []
+    candidates: list[ShiftCandidate] = []
 
     for offset in range(days_ahead + 1):
         target = today + timedelta(days=offset)
@@ -153,8 +158,8 @@ def predict_captain_schedule(
                 continue
 
             ship_capacity = get_ship_capacity(db, pattern.ship).passenger_capacity
-            predictions.append(
-                CaptainPrediction(
+            candidates.append(
+                ShiftCandidate(
                     boat_code=pattern.boat_code,
                     schedule_date=target,
                     day_of_week=DAY_NAMES[dow],
@@ -164,11 +169,28 @@ def predict_captain_schedule(
                     confidence=pattern.confidence,
                     passenger_estimate=ship_capacity,
                     busy_score=busy_score,
-                    source="pattern",
                 )
             )
 
-    predictions.sort(key=lambda p: (p.schedule_date, -p.confidence, p.boat_code))
+    scheduled = apply_scheduling_constraints(candidates)
+
+    predictions = [
+        CaptainPrediction(
+            boat_code=c.boat_code,
+            schedule_date=c.schedule_date,
+            day_of_week=c.day_of_week,
+            ship=c.ship,
+            checkin_time=c.checkin_time,
+            return_time=c.return_time,
+            confidence=c.confidence,
+            passenger_estimate=c.passenger_estimate,
+            busy_score=c.busy_score,
+            source="scheduled",
+        )
+        for c in scheduled
+    ]
+
+    predictions.sort(key=lambda p: (p.schedule_date, p.checkin_time, p.boat_code))
     return predictions
 
 

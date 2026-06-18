@@ -114,7 +114,8 @@ Interactive API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
 1. **Pattern learning** — After each upload, the system analyzes which captains worked which ships on which days of the week
 2. **Confidence scoring** — Patterns with more historical occurrences get higher confidence
 3. **Future projection** — Patterns are projected forward for 30–365 days
-4. **Busy day weighting** — Ship passenger counts (from a built-in registry of major cruise lines) estimate how busy each day will be
+4. **Scheduling constraints** — Predictions enforce one boat per ship at a time, no overlapping captain shifts, alphabetical boat dispatch, and a 3-hour minimum between consecutive tours for the same boat
+5. **Busy day weighting** — Ship passenger counts (from a built-in registry of major cruise lines) estimate how busy each day will be
 
 The more XML data you upload over time, the more accurate and far-reaching the predictions become.
 
