@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Run the Captain Schedule Predictor application."""
+"""
+Development server entry point.
+
+Starts the FastAPI application with auto-reload enabled. For production,
+use: uvicorn app.main:app --host 0.0.0.0 --port 8000
+"""
 
 import uvicorn
 

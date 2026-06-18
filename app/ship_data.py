@@ -1,4 +1,13 @@
-"""Cruise ship passenger capacity data for busy-day estimation."""
+"""
+Cruise ship passenger capacity registry for busy-day estimation.
+
+When predicting how busy a port day will be, we sum the passenger capacity of
+all ships scheduled (or historically typical) for that date. This module:
+
+  - Seeds a built-in registry of 100+ major cruise ships
+  - Fuzzy-matches ship names from CSV data to known vessels
+  - Falls back to a default capacity estimate for unknown ships
+"""
 
 from datetime import datetime
 from difflib import SequenceMatcher
@@ -127,15 +136,17 @@ BUILTIN_SHIPS: dict[str, dict] = {
     "le bellot": {"capacity": 184, "line": "Ponant"},
 }
 
-DEFAULT_CAPACITY = 2500
-SIMILARITY_THRESHOLD = 0.82
+DEFAULT_CAPACITY = 2500  # Used when a ship name cannot be matched to any known vessel
+SIMILARITY_THRESHOLD = 0.82  # Minimum string similarity for fuzzy ship name matching
 
 
 def normalize_ship_name(name: str) -> str:
+    """Normalize ship names for consistent lookup (lowercase, collapsed whitespace)."""
     return " ".join(name.lower().strip().split())
 
 
 def _fuzzy_match_builtin(name: str) -> tuple[str, dict] | None:
+    """Find the closest matching ship in the built-in registry by name similarity."""
     normalized = normalize_ship_name(name)
     if normalized in BUILTIN_SHIPS:
         return normalized, BUILTIN_SHIPS[normalized]
@@ -154,6 +165,12 @@ def _fuzzy_match_builtin(name: str) -> tuple[str, dict] | None:
 
 
 def seed_ship_capacities(db: Session) -> int:
+    """
+    Populate the database with built-in ship capacity records on startup.
+
+    Only inserts ships that are not already present — safe to call repeatedly.
+    Returns the number of new records added.
+    """
     added = 0
     for ship_name, info in BUILTIN_SHIPS.items():
         existing = db.query(ShipCapacity).filter(ShipCapacity.ship_name == ship_name).first()
@@ -174,6 +191,12 @@ def seed_ship_capacities(db: Session) -> int:
 
 
 def get_ship_capacity(db: Session, ship_name: str) -> ShipCapacity:
+    """
+    Look up passenger capacity for a ship, creating a record if needed.
+
+    Lookup order: exact DB match → fuzzy DB match → fuzzy built-in registry
+    → default estimate. New records are persisted so future lookups are fast.
+    """
     normalized = normalize_ship_name(ship_name)
 
     record = db.query(ShipCapacity).filter(ShipCapacity.ship_name == normalized).first()
@@ -208,7 +231,12 @@ def get_ship_capacity(db: Session, ship_name: str) -> ShipCapacity:
 
 
 def estimate_daily_passengers(db: Session, ships: list[str]) -> tuple[int, float]:
-    """Return total passenger estimate and busy score (0-1) for a day."""
+    """
+    Estimate total passengers and a normalized busy score (0–1) for a port day.
+
+    The busy score compares the day's total capacity against ~25k passengers,
+    representing a very busy day with multiple mega-ships in port.
+    """
     if not ships:
         return 0, 0.0
 
@@ -223,8 +251,10 @@ def estimate_daily_passengers(db: Session, ships: list[str]) -> tuple[int, float
 
 def lookup_ship_online(db: Session, ship_name: str) -> ShipCapacity | None:
     """
-    Placeholder for external enrichment. Attempts fuzzy match against built-in registry.
-    Can be extended to scrape CruiseMapper or similar public ship lists.
+    Enrich or create a ship capacity record from the built-in registry.
+
+    Intended as an extension point for external data sources (e.g. CruiseMapper).
+    Currently performs fuzzy matching against the local ship list.
     """
     match = _fuzzy_match_builtin(ship_name)
     if not match:

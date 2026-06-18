@@ -1,3 +1,12 @@
+/*
+ * Captain Schedule Predictor — dashboard styles.
+
+ * Dark-themed layout with:
+ *   - Header stats bar
+ *   - Drag-and-drop CSV upload zone
+ *   - Tabbed panels for predictions, captains, calendar, history
+ *   - Busy-day color intensity on calendar cells
+ */
 :root {
   --bg: #0c1222;
   --surface: #141c2f;

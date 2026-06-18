@@ -1,25 +1,40 @@
+/**
+ * Captain Schedule Predictor — frontend dashboard logic.
+ *
+ * Communicates with the FastAPI backend at /api/* to:
+ *   - Upload dispatch CSV files
+ *   - Display captain shift predictions and busy-day calendar
+ *   - Show upload history and raw stored schedules
+ *
+ * All API calls use relative paths so the app works on any host/port.
+ */
 const API = "";
 
+// DOM helpers
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 
+/** Format an ISO date string (YYYY-MM-DD) for display. */
 function formatDate(iso) {
   const d = new Date(iso + "T00:00:00");
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+/** Map a busy score (0–1) to a CSS class for calendar coloring. */
 function busyClass(score) {
   if (score >= 0.65) return "busy-high";
   if (score >= 0.35) return "busy-med";
   return "busy-low";
 }
 
+/** Map a busy score (0–1) to a human-readable label. */
 function busyLabel(score) {
   if (score >= 0.65) return "High";
   if (score >= 0.35) return "Medium";
   return "Low";
 }
 
+/** Render an inline confidence bar for the predictions table. */
 function confidenceBar(pct) {
   const width = Math.round(pct * 100);
   return `<div class="confidence-bar">
@@ -28,6 +43,7 @@ function confidenceBar(pct) {
   </div>`;
 }
 
+/** Extract a readable error message from an API response (JSON or plain text). */
 async function readErrorDetail(res) {
   const contentType = res.headers.get("content-type") || "";
   if (contentType.includes("application/json")) {
@@ -41,6 +57,7 @@ async function readErrorDetail(res) {
   return text || `Request failed (${res.status})`;
 }
 
+/** Fetch JSON from the API, throwing with a readable message on failure. */
 async function fetchJSON(path) {
   const res = await fetch(API + path);
   if (!res.ok) {
@@ -49,6 +66,7 @@ async function fetchJSON(path) {
   return res.json();
 }
 
+/** Load dashboard header statistics from GET /api/stats. */
 async function loadStats() {
   try {
     const s = await fetchJSON("/api/stats");
@@ -66,6 +84,7 @@ async function loadStats() {
   }
 }
 
+/** Build query string from the forecast filter controls. */
 function queryParams() {
   const captain = $("#captainFilter").value;
   const days = $("#daysAhead").value;
@@ -75,6 +94,7 @@ function queryParams() {
   return q;
 }
 
+/** Populate the captain dropdown filter from GET /api/captains. */
 async function loadCaptainsFilter() {
   try {
     const captains = await fetchJSON("/api/captains?days_ahead=90");
@@ -94,6 +114,7 @@ async function loadCaptainsFilter() {
   }
 }
 
+/** Load and render the predictions table from GET /api/predictions. */
 async function loadPredictions() {
   const tbody = $("#predictionsBody");
   try {
@@ -122,6 +143,7 @@ async function loadPredictions() {
   }
 }
 
+/** Load captain overview cards from GET /api/captains. */
 async function loadCaptainOverview() {
   const grid = $("#captainGrid");
   try {
@@ -150,6 +172,7 @@ async function loadCaptainOverview() {
   }
 }
 
+/** Load the busy-day calendar grid from GET /api/busy-calendar. */
 async function loadCalendar() {
   const grid = $("#calendarGrid");
   try {
@@ -171,6 +194,7 @@ async function loadCalendar() {
   }
 }
 
+/** Load CSV upload history from GET /api/uploads. */
 async function loadUploads() {
   const tbody = $("#uploadsBody");
   try {
@@ -193,6 +217,7 @@ async function loadUploads() {
   }
 }
 
+/** Load raw stored schedule rows from GET /api/schedules. */
 async function loadSchedules() {
   const tbody = $("#schedulesBody");
   try {
@@ -216,6 +241,7 @@ async function loadSchedules() {
   }
 }
 
+/** Refresh all dashboard panels (called on load and after upload). */
 async function refreshAll() {
   await Promise.all([
     loadStats(),
@@ -228,6 +254,7 @@ async function refreshAll() {
   ]);
 }
 
+/** POST a CSV file to /api/upload and refresh the dashboard on success. */
 async function uploadFile(file) {
   const resultEl = $("#uploadResult");
   resultEl.classList.remove("hidden", "success", "error");
@@ -258,6 +285,7 @@ async function uploadFile(file) {
   }
 }
 
+/** Wire up drag-and-drop and file picker for CSV upload. */
 function setupUpload() {
   const zone = $("#uploadZone");
   const input = $("#fileInput");
@@ -286,6 +314,7 @@ function setupUpload() {
   });
 }
 
+/** Wire up tab navigation between dashboard panels. */
 function setupTabs() {
   $$(".tab").forEach((tab) => {
     tab.addEventListener("click", () => {
@@ -297,6 +326,7 @@ function setupTabs() {
   });
 }
 
+/** Wire up forecast filter controls and the refresh button. */
 function setupControls() {
   ["captainFilter", "daysAhead", "minConfidence"].forEach((id) => {
     $("#" + id).addEventListener("change", () => {

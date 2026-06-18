@@ -1,4 +1,14 @@
-"""Learn captain work patterns from historical schedule data and predict future shifts."""
+"""
+Captain schedule prediction engine.
+
+Learns recurring assignment patterns from historical dispatch data and projects
+them forward to answer: "When will captain X likely work next?"
+
+Core approach:
+  1. After each CSV upload, aggregate historical shifts by (captain, weekday, ship, times)
+  2. Compute confidence = how often this assignment occurs vs. all shifts for that captain on that weekday
+  3. For each future date, apply matching weekday patterns and attach busy-day scores
+"""
 
 from collections import defaultdict
 from datetime import date, timedelta
@@ -14,11 +24,17 @@ DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
 
 
 def _split_boat_codes(boat_codes: str) -> list[str]:
+    """Split a boat_codes field into individual operator codes (handles comma and slash separators)."""
     return [c.strip() for c in boat_codes.replace("/", ",").split(",") if c.strip()]
 
 
 def rebuild_patterns(db: Session) -> int:
-    """Rebuild learned patterns from all schedule entries."""
+    """
+    Recompute all captain patterns from the full schedule history.
+
+    Called after every CSV upload so predictions always reflect the complete
+    dataset. Deletes existing patterns and rebuilds from scratch.
+    """
     db.query(CaptainPattern).delete()
     db.commit()
 
@@ -43,6 +59,7 @@ def rebuild_patterns(db: Session) -> int:
         total_by_captain_dow[(code, dow)] += data["count"]
 
     patterns_added = 0
+    # Confidence = this assignment's count / all assignments for this captain on this weekday
     for (code, dow, ship, checkin, return_time), data in aggregates.items():
         total = total_by_captain_dow[(code, dow)]
         confidence = round(data["count"] / max(total, 1), 3)
@@ -64,6 +81,7 @@ def rebuild_patterns(db: Session) -> int:
 
 
 def _ships_on_date(db: Session, schedule_date: date) -> list[str]:
+    """Return distinct ship names that have actual schedule data for a given date."""
     rows = (
         db.query(ScheduleEntry.ship)
         .filter(ScheduleEntry.schedule_date == schedule_date)
@@ -74,12 +92,18 @@ def _ships_on_date(db: Session, schedule_date: date) -> list[str]:
 
 
 def _predict_ships_for_date(db: Session, schedule_date: date) -> list[str]:
-    """If we already have actual data for a date, use it; otherwise infer from same weekday history."""
+    """
+    Determine which ships are expected in port on a date.
+
+    Uses actual uploaded data when available; otherwise falls back to the most
+    frequently seen ships on the same weekday in historical data.
+    """
     actual = _ships_on_date(db, schedule_date)
     if actual:
         return actual
 
     dow = schedule_date.weekday()
+    # SQLite strftime('%w'): 0=Sunday … 6=Saturday; Python weekday(): 0=Monday … 6=Sunday
     historical = (
         db.query(ScheduleEntry.ship, func.count(ScheduleEntry.id).label("cnt"))
         .filter(func.strftime("%w", ScheduleEntry.schedule_date) == str((dow + 1) % 7))
@@ -97,6 +121,13 @@ def predict_captain_schedule(
     days_ahead: int = 90,
     min_confidence: float = 0.15,
 ) -> list[CaptainPrediction]:
+    """
+    Generate future captain shift predictions for the next N days.
+
+    For each day, matches learned weekday patterns and attaches ship capacity
+    and busy-day scores. Optionally filters to a single boat_code and minimum
+    confidence threshold.
+    """
     patterns = db.query(CaptainPattern).all()
     if not patterns:
         rebuild_patterns(db)
@@ -142,6 +173,11 @@ def predict_captain_schedule(
 
 
 def get_captain_summaries(db: Session, days_ahead: int = 90) -> list[CaptainSummary]:
+    """
+    Build a per-captain overview: historical shift count, predicted count, and next shift.
+
+    Used by the dashboard "Captain Overview" tab.
+    """
     codes = (
         db.query(CaptainPattern.boat_code)
         .distinct()
@@ -180,6 +216,12 @@ def get_captain_summaries(db: Session, days_ahead: int = 90) -> list[CaptainSumm
 
 
 def get_busy_calendar(db: Session, days_ahead: int = 90) -> list[dict]:
+    """
+    Build a day-by-day calendar of estimated port busyness.
+
+    Each entry includes ship count, passenger estimate, busy score (0–1), and
+    whether actual uploaded schedule data exists for that date.
+    """
     today = date.today()
     calendar: list[dict] = []
 

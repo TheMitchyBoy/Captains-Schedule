@@ -1,3 +1,12 @@
+"""
+FastAPI application entry point and REST API routes.
+
+Serves two roles:
+  1. JSON API at /api/* for schedule upload, queries, and predictions
+  2. Static web dashboard at / for the browser-based UI
+
+Upload flow: receive CSV → parse & persist → rebuild captain patterns → return summary
+"""
 from datetime import date
 from pathlib import Path
 
@@ -30,6 +39,7 @@ from app.ship_data import lookup_ship_online, seed_ship_capacities
 
 
 def _resolve_upload_filename(filename: str | None, content_type: str | None) -> str:
+    """Use the uploaded filename, or fall back when browsers omit it on drag-and-drop."""
     if filename and filename.strip():
         return filename.strip()
     if content_type and "csv" in content_type.lower():
@@ -38,6 +48,12 @@ def _resolve_upload_filename(filename: str | None, content_type: str | None) -> 
 
 
 def _looks_like_csv(filename: str | None, content_type: str | None, content: bytes) -> bool:
+    """
+    Determine whether uploaded bytes are likely a dispatch CSV.
+
+    Checks file extension, MIME type, and a content sniff of the header row.
+    This avoids rejecting valid CSVs when the browser sends no filename.
+    """
     if filename and filename.strip():
         lower = filename.strip().lower()
         if lower.endswith((".csv", ".txt", ".tsv")):
@@ -94,6 +110,7 @@ app.add_middleware(
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Always return JSON error bodies so the frontend can display meaningful messages."""
     if isinstance(exc, StarletteHTTPException):
         detail = exc.detail
         if not isinstance(detail, str):
@@ -107,6 +124,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 @app.on_event("startup")
 def on_startup():
+    """Initialize database tables and seed the ship capacity registry."""
     init_db()
     db = next(get_db())
     try:
@@ -125,6 +143,12 @@ async def upload_csv(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
+    """
+    Accept a dispatch CSV upload, persist rows, and rebuild prediction patterns.
+
+    Returns counts of imported vs. skipped (duplicate) rows. Row-level parse
+    warnings are included in the `notes` field.
+    """
     try:
         content = await file.read()
         if not content:
@@ -169,6 +193,7 @@ def list_schedules(
     limit: int = Query(default=500, le=2000),
     db: Session = Depends(get_db),
 ):
+    """Return stored schedule entries with optional date, ship, and captain filters."""
     q = db.query(ScheduleEntry)
     if start_date:
         q = q.filter(ScheduleEntry.schedule_date >= start_date)
@@ -189,6 +214,7 @@ def get_predictions(
     min_confidence: float = Query(default=0.15, ge=0.0, le=1.0),
     db: Session = Depends(get_db),
 ):
+    """Return forecasted captain shifts for the next N days."""
     return predict_captain_schedule(
         db,
         boat_code=boat_code,
@@ -202,6 +228,7 @@ def list_captains(
     days_ahead: int = Query(default=90, ge=7, le=365),
     db: Session = Depends(get_db),
 ):
+    """Return per-captain summaries with next predicted shift."""
     return get_captain_summaries(db, days_ahead=days_ahead)
 
 
@@ -210,16 +237,19 @@ def busy_calendar(
     days_ahead: int = Query(default=90, ge=7, le=365),
     db: Session = Depends(get_db),
 ):
+    """Return daily port busyness estimates based on ship passenger capacity."""
     return get_busy_calendar(db, days_ahead=days_ahead)
 
 
 @app.get("/api/ships", response_model=list[ShipCapacityOut])
 def list_ships(db: Session = Depends(get_db)):
+    """Return all known ship capacity records, sorted by passenger count."""
     return db.query(ShipCapacity).order_by(ShipCapacity.passenger_capacity.desc()).all()
 
 
 @app.post("/api/ships/lookup")
 def lookup_ship(ship_name: str, db: Session = Depends(get_db)):
+    """Look up or enrich passenger capacity for a ship by name."""
     record = lookup_ship_online(db, ship_name)
     if not record:
         raise HTTPException(status_code=404, detail=f"No capacity data found for '{ship_name}'")
@@ -228,12 +258,14 @@ def lookup_ship(ship_name: str, db: Session = Depends(get_db)):
 
 @app.post("/api/patterns/rebuild")
 def patterns_rebuild(db: Session = Depends(get_db)):
+    """Manually trigger a full rebuild of learned captain patterns."""
     count = rebuild_patterns(db)
     return {"patterns_rebuilt": count}
 
 
 @app.get("/api/stats", response_model=StatsOut)
 def stats(db: Session = Depends(get_db)):
+    """Return aggregate counts for the dashboard header."""
     total = db.query(func.count(ScheduleEntry.id)).scalar() or 0
     ships = db.query(func.count(func.distinct(ScheduleEntry.ship))).scalar() or 0
     captains = db.query(func.count(func.distinct(ScheduleEntry.boat_codes))).scalar() or 0
@@ -253,6 +285,7 @@ def stats(db: Session = Depends(get_db)):
 
 @app.get("/api/uploads")
 def list_uploads(db: Session = Depends(get_db)):
+    """Return recent CSV upload history for the dashboard."""
     logs = db.query(UploadLog).order_by(UploadLog.uploaded_at.desc()).limit(20).all()
     return [
         {
@@ -273,6 +306,7 @@ if STATIC_DIR.exists():
 
 @app.get("/")
 def index():
+    """Serve the web dashboard (falls back to API info if static files are missing)."""
     index_path = STATIC_DIR / "index.html"
     if index_path.exists():
         return FileResponse(index_path)

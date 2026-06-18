@@ -1,4 +1,15 @@
-import io
+"""
+CSV parsing and schedule import pipeline.
+
+Responsible for:
+  1. Reading uploaded CSV bytes (handles Excel exports, alternate delimiters)
+  2. Normalizing column names to the expected schema
+  3. Parsing dispatch date headers into concrete dates
+  4. Persisting rows to the database with deduplication
+
+Expected CSV columns (aliases are also accepted — see COLUMN_ALIASES):
+  date_header, ship, checkin_time, return_time, boat_codes
+"""
 import re
 import uuid
 from datetime import date, datetime
@@ -9,6 +20,7 @@ from sqlalchemy.orm import Session
 from app.models import ScheduleEntry, UploadLog
 from app.ship_data import get_ship_capacity
 
+# Canonical column names every valid dispatch CSV must map to after normalization.
 REQUIRED_COLUMNS = {
     "date_header",
     "ship",
@@ -17,6 +29,7 @@ REQUIRED_COLUMNS = {
     "boat_codes",
 }
 
+# Maps canonical names to common header variants seen in Excel/manual exports.
 COLUMN_ALIASES: dict[str, list[str]] = {
     "date_header": [
         "date_header",
@@ -63,6 +76,7 @@ COLUMN_ALIASES: dict[str, list[str]] = {
     ],
 }
 
+# Matches dispatch date lines like "Thursday 6/4 - 6 ships".
 DATE_HEADER_PATTERN = re.compile(
     r"(?P<weekday>[A-Za-z]+)\s+(?P<month>\d{1,2})/(?P<day>\d{1,2})"
     r"(?:\s*-\s*(?P<ship_count>\d+)\s*ships?)?",
@@ -71,6 +85,7 @@ DATE_HEADER_PATTERN = re.compile(
 
 
 def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Lowercase and rename CSV headers to the canonical column names."""
     df = df.copy()
     df.columns = [
         str(c).strip().lower().replace(" ", "_").replace("-", "_")
@@ -93,6 +108,7 @@ def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _cell_str(value) -> str:
+    """Convert a pandas cell to a clean string, treating NaN/None as empty."""
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return ""
     text = str(value).strip()
@@ -100,6 +116,11 @@ def _cell_str(value) -> str:
 
 
 def parse_date_from_header(date_header: str, reference_year: int | None = None) -> tuple[date | None, int | None]:
+    """
+    Extract a calendar date and optional ship count from a dispatch header line.
+
+    Example input: "Thursday 6/4 - 6 ships" → date(2026, 6, 4), 6
+    """
     if not date_header or not isinstance(date_header, str):
         return None, None
 
@@ -121,7 +142,12 @@ def parse_date_from_header(date_header: str, reference_year: int | None = None) 
 
 
 def infer_reference_year(rows: list[dict]) -> int:
-    """Pick a year that keeps parsed dates near today (handles year rollover)."""
+    """
+    Choose the most likely year for dates that omit a year in the header.
+
+    Dispatch CSVs often use "6/4" without a year. We try the previous, current,
+    and next calendar year and pick whichever keeps parsed dates closest to today.
+    """
     today = date.today()
     candidates: set[int] = set()
     for row in rows:
@@ -163,9 +189,16 @@ def infer_reference_year(rows: list[dict]) -> int:
 
 
 def parse_csv_content(content: bytes, filename: str = "upload.csv") -> tuple[list[dict], list[str]]:
+    """
+    Parse raw CSV bytes into validated schedule row dicts.
+
+    Returns (parsed_rows, errors). Individual bad rows produce error messages
+    but do not fail the entire file — valid rows are still returned.
+    """
     errors: list[str] = []
     df = None
 
+    # Try auto-detect, comma, tab, and semicolon delimiters (Excel/locale variants).
     for sep in (None, ",", "\t", ";"):
         try:
             df = pd.read_csv(io.BytesIO(content), sep=sep, engine="python" if sep else "c")
@@ -215,12 +248,21 @@ def parse_csv_content(content: bytes, filename: str = "upload.csv") -> tuple[lis
 
 
 def import_schedules(db: Session, content: bytes, filename: str) -> tuple[str, int, int, list[str]]:
+    """
+    Parse a CSV and persist schedule rows to the database.
+
+    Deduplication strategy:
+      - Within the same upload batch: skip duplicate keys in-memory
+      - Across uploads: update existing rows instead of inserting duplicates
+
+    Returns (batch_id, rows_imported, rows_skipped, parse_errors).
+    """
     batch_id = str(uuid.uuid4())
     rows, errors = parse_csv_content(content, filename)
 
     imported = 0
     skipped = 0
-    seen_in_batch: set[tuple] = set()
+    seen_in_batch: set[tuple] = set()  # Prevent duplicate inserts within one CSV commit
 
     for row in rows:
         key = (
@@ -255,6 +297,7 @@ def import_schedules(db: Session, content: bytes, filename: str) -> tuple[str, i
 
         get_ship_capacity(db, row["ship"])
 
+        # Truncate to column max lengths to avoid database constraint errors.
         entry = ScheduleEntry(
             date_header=row["date_header"][:255],
             schedule_date=row["schedule_date"],
