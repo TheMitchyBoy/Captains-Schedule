@@ -88,6 +88,7 @@
         <button class="tab active" data-tab="predictions">Predictions</button>
         <button class="tab" data-tab="captains">Captain Overview</button>
         <button class="tab" data-tab="calendar">Busy Calendar</button>
+        <button class="tab" data-tab="repair">XML Repair</button>
         <button class="tab" data-tab="history">Uploaded History</button>
         <button class="tab" data-tab="schedules">Raw Schedules</button>
       </div>
@@ -133,6 +134,40 @@
           <h2>Busy Day Calendar</h2>
           <p class="card-desc">Estimated passenger volume from cruise ship capacity data — darker = busier port day</p>
           <div class="calendar-grid" id="calendarGrid"></div>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="panel-repair">
+        <div class="card">
+          <h2>XML Repair &amp; Analysis</h2>
+          <p class="card-desc">Paste raw XML to re-parse, convert times to 24-hour <code>HH:MM</code>, and repair boat fields corrupted with <code>15am:</code>, <code>30am:</code>, <code>15pm:</code>, or <code>30pm:</code> prefixes</p>
+          <textarea id="rawXmlInput" class="xml-input" placeholder="Paste raw dispatch XML here..."></textarea>
+          <div class="repair-actions">
+            <button type="button" class="btn" id="cleanXmlBtn">Clean &amp; Analyze XML</button>
+            <button type="button" class="btn secondary" id="copyCleanXmlBtn" disabled>Copy Cleaned XML</button>
+            <input type="file" id="repairFileInput" accept=".xml,text/xml,application/xml" hidden />
+            <button type="button" class="btn secondary" id="loadRepairFileBtn">Load XML File</button>
+          </div>
+          <div id="repairSummary" class="repair-summary hidden"></div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Field</th>
+                  <th>Issue</th>
+                  <th>Before</th>
+                  <th>After</th>
+                  <th>Confidence</th>
+                </tr>
+              </thead>
+              <tbody id="repairsBody">
+                <tr><td colspan="6" class="empty">No repairs yet — paste XML and click Clean</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 class="subheading">Cleaned XML Output</h3>
+          <pre id="cleanedXmlOutput" class="xml-output">Cleaned XML will appear here...</pre>
         </div>
       </section>
 

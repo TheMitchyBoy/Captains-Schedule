@@ -434,6 +434,59 @@ tr:hover td {
   outline-offset: -2px;
 }
 
+.xml-input {
+  width: 100%;
+  min-height: 160px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.85rem;
+  padding: 1rem;
+  resize: vertical;
+  margin-bottom: 1rem;
+}
+
+.xml-output {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  overflow-x: auto;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  max-height: 420px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.repair-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.repair-summary {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.repair-summary.hidden {
+  display: none;
+}
+
+.subheading {
+  font-size: 0.95rem;
+  margin: 1.25rem 0 0.75rem;
+}
+
 .footer {
   margin-top: 3rem;
   padding-top: 1.5rem;

@@ -10,7 +10,7 @@ Upload flow: receive XML → parse & persist → rebuild captain patterns → re
 from datetime import date
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi import Body, Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -34,8 +34,11 @@ from app.schemas import (
     ShipCapacityOut,
     StatsOut,
     UploadResult,
+    XmlCleanResult,
+    RepairRecordOut,
 )
 from app.ship_data import lookup_ship_online, seed_ship_capacities
+from app.xml_cleaner import clean_xml_content
 
 
 def _resolve_upload_filename(filename: str | None, content_type: str | None) -> str:
@@ -131,6 +134,82 @@ def on_startup():
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+def _clean_result_response(result) -> XmlCleanResult:
+    """Map internal CleanResult dataclass to API response schema."""
+    return XmlCleanResult(
+        cleaned_xml=result.cleaned_xml,
+        entries_processed=result.analysis.entries_found,
+        times_normalized=result.analysis.times_normalized,
+        boat_fields_repaired=result.analysis.boat_fields_repaired,
+        parse_method=result.analysis.parse_method,
+        ai_assisted=result.analysis.ai_assisted,
+        hour_distribution=result.analysis.hour_distribution,
+        repairs=[
+            RepairRecordOut(
+                entry_index=r.entry_index,
+                field=r.field,
+                issue=r.issue,
+                before=r.before,
+                after=r.after,
+                confidence=r.confidence,
+            )
+            for r in result.repairs
+        ],
+        warnings=result.analysis.warnings,
+        errors=result.errors,
+    )
+
+
+@app.post("/api/clean-xml", response_model=XmlCleanResult)
+async def clean_xml_endpoint(
+    file: UploadFile | None = File(None),
+    raw_xml: str | None = Form(None),
+):
+    """
+    Accept raw XML (file upload or pasted text), re-parse, repair, and return cleaned XML.
+
+    Repairs include 24-hour time normalization and moving leaked time fragments
+    (15am:, 30am:, 15pm:, 30pm:) from boat_codes back into checkin_time.
+    """
+    content: bytes | str | None = None
+
+    if file and file.filename:
+        content = await file.read()
+    elif raw_xml and raw_xml.strip():
+        content = raw_xml
+    else:
+        raise HTTPException(status_code=400, detail="Provide an XML file or raw_xml form field")
+
+    if not content:
+        raise HTTPException(status_code=400, detail="XML input is empty")
+
+    result = clean_xml_content(content)
+    if not result.entries and not result.cleaned_xml:
+        raise HTTPException(
+            status_code=400,
+            detail=result.errors[0] if result.errors else "Could not parse or repair XML",
+        )
+
+    return _clean_result_response(result)
+
+
+@app.post("/api/clean-xml/json", response_model=XmlCleanResult)
+async def clean_xml_json(payload: dict = Body(...)):
+    """Accept raw XML in a JSON body: {"xml": "<schedules>...</schedules>"}."""
+    raw_xml = payload.get("xml")
+    if not raw_xml or not str(raw_xml).strip():
+        raise HTTPException(status_code=400, detail="JSON body must include non-empty 'xml' field")
+
+    result = clean_xml_content(str(raw_xml))
+    if not result.entries and not result.cleaned_xml:
+        raise HTTPException(
+            status_code=400,
+            detail=result.errors[0] if result.errors else "Could not parse or repair XML",
+        )
+
+    return _clean_result_response(result)
 
 
 @app.post("/api/upload", response_model=UploadResult)

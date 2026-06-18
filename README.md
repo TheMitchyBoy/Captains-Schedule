@@ -8,7 +8,7 @@ Upload cruise dispatch XML schedules, store them in a SQLite database, and predi
 - **Persistent database** — Every upload is stored and deduplicated; patterns improve with more data
 - **Captain predictions** — Learns day-of-week patterns per captain/boat code and forecasts shifts up to 365 days ahead
 - **Busy day calendar** — Estimates port busyness using passenger capacity data for 100+ major cruise ships
-- **Web dashboard** — View predictions, captain overviews, upload history, and raw schedules
+- **XML repair tool** — Re-parse raw XML, normalize times to 24-hour `HH:MM`, and fix corrupted boat fields (`15am:`, `30am:`, `15pm:`, `30pm:`)
 
 ## Quick Start
 
@@ -64,11 +64,41 @@ Example:
 
 Alternative element names are also accepted (e.g. `<entry>`, `<vessel>`, `<check_in_time>`, `<boat_code>`).
 
+## XML Repair Tool
+
+The cleaner re-parses raw XML and applies automated data analysis repairs before import.
+
+**Repairs performed:**
+- Converts `checkin_time` and `return_time` to 24-hour `HH:MM` format (e.g. `7:00 AM` → `07:00`, `4:30 PM` → `16:30`)
+- Detects boat fields that incorrectly start with `15am:`, `30am:`, `15pm:`, or `30pm:` and moves those minutes back into check-in time (e.g. `7am` + `30am:CPT-A` → `07:30` / `CPT-A`)
+
+**CLI usage:**
+
+```bash
+python repair_xml.py sample_data/malformed_schedule.xml           # print cleaned XML
+python repair_xml.py sample_data/malformed_schedule.xml -o out.xml
+python repair_xml.py sample_data/malformed_schedule.xml --report  # JSON repair report
+```
+
+**API usage:**
+
+```bash
+curl -X POST http://localhost:8000/api/clean-xml/json \
+  -H "Content-Type: application/json" \
+  -d '{"xml": "<schedules>...</schedules>"}'
+```
+
+The web dashboard includes an **XML Repair** tab for pasting raw XML, viewing the repair report, and copying cleaned output.
+
+Optional AI-assisted recovery for badly malformed XML is enabled when `OPENAI_API_KEY` is set.
+
 ## API Endpoints
 
 | Method | Path                  | Description                          |
 | ------ | --------------------- | ------------------------------------ |
-| POST   | `/api/upload`         | Upload an XML file                   |
+| POST   | `/api/upload`         | Upload an XML file (auto-cleaned on import) |
+| POST   | `/api/clean-xml`      | Clean/repair XML (file upload or form field) |
+| POST   | `/api/clean-xml/json` | Clean/repair XML (`{"xml": "..."}` body)     |
 | GET    | `/api/schedules`      | List stored schedule entries         |
 | GET    | `/api/predictions`    | Get future captain shift predictions |
 | GET    | `/api/captains`       | Captain overview with next shift     |

@@ -87,3 +87,29 @@ class ShipCapacityOut(BaseModel):
     source: str
 
     model_config = {"from_attributes": True}
+
+
+class RepairRecordOut(BaseModel):
+    """One automated repair applied during XML cleaning."""
+
+    entry_index: int
+    field: str
+    issue: str
+    before: str
+    after: str
+    confidence: float = Field(ge=0.0, le=1.0)
+
+
+class XmlCleanResult(BaseModel):
+    """Output from the XML clean/repair pipeline."""
+
+    cleaned_xml: str
+    entries_processed: int
+    times_normalized: int
+    boat_fields_repaired: int
+    parse_method: str
+    ai_assisted: bool
+    hour_distribution: dict[str, int]
+    repairs: list[RepairRecordOut]
+    warnings: list[str] = []
+    errors: list[str] = []

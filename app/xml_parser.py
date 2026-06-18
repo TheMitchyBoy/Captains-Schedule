@@ -318,7 +318,22 @@ def import_schedules(db: Session, content: bytes, filename: str) -> tuple[str, i
     Returns (batch_id, rows_imported, rows_skipped, parse_errors).
     """
     batch_id = str(uuid.uuid4())
+
+    # Clean and repair raw XML before database import (time normalization, boat field fixes).
+    from app.xml_cleaner import clean_xml_bytes
+
+    cleaned_content, clean_report = clean_xml_bytes(content)
+    if cleaned_content:
+        content = cleaned_content
+
     rows, errors = parse_xml_content(content, filename)
+
+    if clean_report.repairs:
+        repair_note = (
+            f"Auto-repaired {clean_report.analysis.times_normalized} times, "
+            f"{clean_report.analysis.boat_fields_repaired} boat fields"
+        )
+        errors = [repair_note, *errors]
 
     imported = 0
     skipped = 0

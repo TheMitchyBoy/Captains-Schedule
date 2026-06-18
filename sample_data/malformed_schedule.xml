@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schedules>
+  <schedule>
+    <date_header>Thursday 6/4 - 6 ships</date_header>
+    <ship>Symphony of the Seas</ship>
+    <checkin_time>7am</checkin_time>
+    <return_time>4:30 PM</return_time>
+    <boat_codes>30am:CPT-A / OP-12</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Thursday 6/4 - 6 ships</date_header>
+    <ship>Carnival Horizon</ship>
+    <checkin_time>8:00 AM</checkin_time>
+    <return_time>5pm</return_time>
+    <boat_codes>CPT-B</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Friday 6/5 - 5 ships</date_header>
+    <ship>Norwegian Escape</ship>
+    <checkin_time>7am</checkin_time>
+    <return_time>4:00 PM</return_time>
+    <boat_codes>30am:CPT-A</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Friday 6/5 - 5 ships</date_header>
+    <ship>Celebrity Beyond</ship>
+    <checkin_time>4pm</checkin_time>
+    <return_time>6:45 PM</return_time>
+    <boat_codes>15pm:CPT-C</boat_codes>
+  </schedule>
+  <schedule>
+    <date_header>Saturday 6/6 - 4 ships</date_header>
+    <ship>Disney Wish</ship>
+    <checkin_time>7:15 AM</checkin_time>
+    <return_time>3:45pm</return_time>
+    <boat_codes>15am:OP-07</boat_codes>
+  </schedule>
+</schedules>

@@ -285,6 +285,97 @@ async function uploadFile(file) {
   }
 }
 
+let lastCleanedXml = "";
+
+/** Send raw XML to the clean/repair API and display results. */
+async function cleanRawXml(xmlText) {
+  const summaryEl = $("#repairSummary");
+  const repairsBody = $("#repairsBody");
+  const outputEl = $("#cleanedXmlOutput");
+  const copyBtn = $("#copyCleanXmlBtn");
+
+  summaryEl.classList.add("hidden");
+  repairsBody.innerHTML = '<tr><td colspan="6" class="empty">Analyzing...</td></tr>';
+
+  try {
+    const res = await fetch(API + "/api/clean-xml/json", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ xml: xmlText }),
+    });
+    if (!res.ok) {
+      throw new Error(await readErrorDetail(res));
+    }
+    const data = await res.json();
+
+    lastCleanedXml = data.cleaned_xml || "";
+    outputEl.textContent = lastCleanedXml || "No output produced.";
+    copyBtn.disabled = !lastCleanedXml;
+
+    summaryEl.classList.remove("hidden");
+    summaryEl.innerHTML = `
+      <strong>Analysis complete.</strong>
+      ${data.entries_processed} entries ·
+      ${data.times_normalized} times normalized ·
+      ${data.boat_fields_repaired} boat fields repaired ·
+      parser: ${data.parse_method}${data.ai_assisted ? " (AI-assisted)" : ""}
+    `;
+
+    if (!data.repairs.length) {
+      repairsBody.innerHTML = '<tr><td colspan="6" class="empty">No repairs needed — XML was already clean</td></tr>';
+    } else {
+      repairsBody.innerHTML = data.repairs.map((r) => `
+        <tr>
+          <td>${r.entry_index}</td>
+          <td><code>${r.field}</code></td>
+          <td>${r.issue}</td>
+          <td>${r.before}</td>
+          <td>${r.after}</td>
+          <td>${Math.round(r.confidence * 100)}%</td>
+        </tr>
+      `).join("");
+    }
+  } catch (e) {
+    repairsBody.innerHTML = `<tr><td colspan="6" class="empty">Repair failed: ${e.message}</td></tr>`;
+    outputEl.textContent = "Error during repair.";
+    copyBtn.disabled = true;
+    lastCleanedXml = "";
+  }
+}
+
+/** Wire up the XML repair tab controls. */
+function setupRepair() {
+  $("#cleanXmlBtn").addEventListener("click", () => {
+    const xml = $("#rawXmlInput").value.trim();
+    if (!xml) {
+      alert("Paste raw XML first");
+      return;
+    }
+    cleanRawXml(xml);
+  });
+
+  $("#copyCleanXmlBtn").addEventListener("click", async () => {
+    if (!lastCleanedXml) return;
+    await navigator.clipboard.writeText(lastCleanedXml);
+    $("#copyCleanXmlBtn").textContent = "Copied!";
+    setTimeout(() => { $("#copyCleanXmlBtn").textContent = "Copy Cleaned XML"; }, 1500);
+  });
+
+  $("#loadRepairFileBtn").addEventListener("click", () => $("#repairFileInput").click());
+
+  $("#repairFileInput").addEventListener("change", () => {
+    const file = $("#repairFileInput").files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      $("#rawXmlInput").value = reader.result;
+      cleanRawXml(String(reader.result));
+    };
+    reader.readAsText(file);
+    $("#repairFileInput").value = "";
+  });
+}
+
 /** Wire up drag-and-drop and file picker for XML upload. */
 function setupUpload() {
   const zone = $("#uploadZone");
@@ -340,6 +431,7 @@ function setupControls() {
 
 document.addEventListener("DOMContentLoaded", () => {
   setupUpload();
+  setupRepair();
   setupTabs();
   setupControls();
   refreshAll();
