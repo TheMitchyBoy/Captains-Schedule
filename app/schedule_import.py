@@ -40,7 +40,6 @@ def persist_schedule_rows(
             row["ship"],
             row["checkin_time"],
             row["return_time"],
-            row["boat_codes"],
         )
         if key in seen_in_batch:
             skipped += 1
@@ -54,7 +53,6 @@ def persist_schedule_rows(
                 ScheduleEntry.ship == row["ship"],
                 ScheduleEntry.checkin_time == row["checkin_time"],
                 ScheduleEntry.return_time == row["return_time"],
-                ScheduleEntry.boat_codes == row["boat_codes"],
             )
             .first()
         )
@@ -62,6 +60,7 @@ def persist_schedule_rows(
             existing.date_header = row["date_header"]
             existing.ship_count = row["ship_count"]
             existing.berth = row.get("berth")
+            existing.boat_codes = row["boat_codes"][:255]
             existing.upload_batch_id = batch_id
             skipped += 1
             continue

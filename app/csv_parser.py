@@ -21,7 +21,7 @@ from datetime import date, datetime
 
 from sqlalchemy.orm import Session
 
-from app.berth_utils import is_captain_boat_code, looks_like_berth_code, normalize_berth
+from app.berth_utils import is_captain_boat_code, looks_like_berth_code, normalize_berth, repair_boat_berth_value
 from app.schedule_import import clear_schedule_data, persist_schedule_rows
 from app.xml_cleaner import normalize_time_24h
 from app.xml_parser import (
@@ -80,11 +80,16 @@ CSV_COLUMN_ALIASES: dict[str, list[str]] = {
     "boat_codes": [
         "boat_codes",
         "boat_code",
+        "boat",
+        "boats",
         "captain",
         "captain_code",
         "tour_boat",
+        "tour_boat_code",
+        "operator",
         "operator_code",
         "dispatch_boat",
+        "dispatch",
     ],
     "berth": [
         "berth",
@@ -116,8 +121,26 @@ def _normalize_header(name: str) -> str:
 
 
 def _resolve_csv_column(header: str) -> str | None:
+    """
+    Map a CSV header to a canonical field.
+
+    When a header could match multiple fields, prefer tour-boat columns over
+    port-berth columns (e.g. 'boat' → boat_codes, not berth).
+    """
     normalized = _normalize_header(header)
+
+    # Explicit tour-boat headers first — never treat 'boat' as a berth column.
+    boat_headers = {_normalize_header(a) for a in CSV_COLUMN_ALIASES["boat_codes"]}
+    if normalized in boat_headers:
+        return "boat_codes"
+
+    berth_headers = {_normalize_header(a) for a in CSV_COLUMN_ALIASES["berth"]}
+    if normalized in berth_headers:
+        return "berth"
+
     for field, aliases in CSV_COLUMN_ALIASES.items():
+        if field in ("boat_codes", "berth"):
+            continue
         alias_norms = {_normalize_header(a) for a in aliases}
         if normalized in alias_norms or normalized == field:
             return field
@@ -184,21 +207,13 @@ def _resolve_boat_and_berth(row: dict[str, str]) -> tuple[str, str | None]:
     """
     Separate port berth codes from captain/tour-boat dispatch codes.
 
-    Berth values (WW, BW, BWA, 1, AN3) must never become boat_codes.
+    Port berth values (2, 3, WW, AN3) must never become boat_codes.
+    Tour boat codes (BW, BWA, FNF, 50/50, SR, SL) belong in boat_codes.
     """
     raw_boat = row.get("boat_codes", "").strip()
     raw_berth = row.get("berth", "").strip()
 
-    if raw_boat and looks_like_berth_code(raw_boat) and not raw_berth:
-        raw_berth = normalize_berth(raw_boat)
-        raw_boat = ""
-
-    if raw_boat and raw_berth and looks_like_berth_code(raw_boat):
-        raw_berth = normalize_berth(raw_boat)
-        raw_boat = ""
-
-    berth = normalize_berth(raw_berth) if raw_berth else None
-    boat_codes = raw_boat if raw_boat and is_captain_boat_code(raw_boat) else ""
+    boat_codes, berth = repair_boat_berth_value(raw_boat or None, raw_berth or None)
     return boat_codes, berth
 
 

@@ -45,6 +45,7 @@ from app.schemas import (
     XmlCleanResult,
     RepairRecordOut,
 )
+from app.schedule_repair import repair_schedule_berth_mixups
 from app.ship_data import lookup_ship_online, seed_ship_capacities
 from app.xml_cleaner import clean_xml_content
 
@@ -111,12 +112,15 @@ def _finalize_upload(
     replaced: int = 0,
 ) -> UploadResult:
     """Rebuild patterns after a successful import and return API response."""
+    repaired = repair_schedule_berth_mixups(db)
     rebuild_patterns(db)
     clear_ai_prediction_cache()
 
     notes_parts: list[str] = []
     if replaced:
         notes_parts.append(f"Replaced {replaced} existing schedule rows")
+    if repaired:
+        notes_parts.append(f"Repaired {repaired} berth/boat field mixups")
     if errors:
         notes_parts.extend(errors[:5])
 
@@ -169,6 +173,11 @@ def on_startup():
         seed_ship_capacities(db)
         entry_count = db.query(func.count(ScheduleEntry.id)).scalar() or 0
         pattern_count = db.query(func.count(CaptainPattern.id)).scalar() or 0
+        if entry_count:
+            repaired = repair_schedule_berth_mixups(db)
+            if repaired:
+                print(f"Repaired {repaired} schedule rows with berth/boat field mixups")
+                rebuild_patterns(db)
         if entry_count and pattern_count == 0:
             rebuilt = rebuild_patterns(db)
             print(f"Restored {rebuilt} captain patterns from {entry_count} stored schedule entries")
