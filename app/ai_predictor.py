@@ -231,7 +231,7 @@ def ai_suggest_captain_shifts(
             f"Ships needing captain assignments: {uncovered_text}\n\n"
             "Suggest captain assignments for the uncovered ships only. "
             "Return JSON array:\n"
-            '[{"boat_code": "CPT-A", "ship": "Ship Name", "checkin_time": "7:00 AM", '
+            '[{"boat_code": "DrmC", "ship": "Ship Name", "checkin_time": "7:00 AM", '
             '"return_time": "3:00 PM", "confidence": 0.55, "reason": "brief reason"}]\n'
             "Use boat codes from the available list. Confidence 0.4-0.75 for AI suggestions."
         )

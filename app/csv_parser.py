@@ -217,19 +217,6 @@ def _resolve_boat_and_berth(row: dict[str, str]) -> tuple[str, str | None]:
     return boat_codes, berth
 
 
-def _assign_boat_codes_by_day(rows: list[dict]) -> None:
-    """Fill missing boat codes with alphabetical CPT-* assignments per day."""
-    by_day: dict[date, list[dict]] = defaultdict(list)
-    for row in rows:
-        if not row.get("boat_codes"):
-            by_day[row["schedule_date"]].append(row)
-
-    for schedule_date, day_rows in by_day.items():
-        day_rows.sort(key=lambda r: r["ship"].lower())
-        for idx, row in enumerate(day_rows):
-            row["boat_codes"] = f"CPT-{chr(ord('A') + idx)}"
-
-
 def _apply_ship_counts(rows: list[dict]) -> None:
     """Set ship_count and enrich date_header when count is known."""
     counts: dict[date, int] = defaultdict(int)
@@ -366,7 +353,6 @@ def parse_csv_content(content: bytes, filename: str = "upload.csv") -> tuple[lis
             }
         )
 
-    _assign_boat_codes_by_day(parsed_rows)
     _apply_ship_counts(parsed_rows)
     return parsed_rows, errors
 

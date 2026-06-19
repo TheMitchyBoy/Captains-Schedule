@@ -13,7 +13,7 @@ def test_parse_ketchikan_sample_csv():
     assert rows[0]["ship"] == "Brilliant Lady"
     assert rows[0]["checkin_time"] == "09:00"
     assert rows[0]["berth"] == "3"
-    assert rows[0]["boat_codes"] == "CPT-A"
+    assert rows[0]["boat_codes"] == ""
 
 
 def test_looks_like_csv():
@@ -44,7 +44,7 @@ def test_parse_csv_repair_legacy_berth_in_boat_field():
     rows, errors = parse_csv_content(csv_text.encode(), "legacy.csv")
     assert not errors
     assert rows[0]["berth"] == "2"
-    assert rows[0]["boat_codes"] == "CPT-A"
+    assert rows[0]["boat_codes"] == ""
 
 
 def test_looks_like_csv_rejects_xml():

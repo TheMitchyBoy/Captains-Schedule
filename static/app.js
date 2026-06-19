@@ -287,7 +287,7 @@ async function loadSchedules() {
         <td>${s.checkin_time}</td>
         <td>${s.return_time}</td>
         <td>${s.berth ? `<code>${s.berth}</code>` : "—"}</td>
-        <td><code>${s.boat_codes}</code></td>
+        <td>${s.boat_codes ? `<code>${s.boat_codes}</code>` : "—"}</td>
       </tr>
     `).join("");
   } catch (e) {

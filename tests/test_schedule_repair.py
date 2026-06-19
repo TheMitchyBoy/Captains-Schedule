@@ -35,5 +35,5 @@ def test_repair_moves_berth_prefix_out_of_boat_codes():
 
     assert updated >= 1
     assert entry.berth == "2"
-    assert entry.boat_codes == "CPT-A"
+    assert entry.boat_codes == ""
     db.close()

@@ -4,8 +4,8 @@ Berth vs. captain/tour-boat code detection.
 Ketchikan port schedules use numeric berth codes (1, 2, 3, 4) and dock codes
 (WW, WE, AN3) for where a cruise ship docks.
 
-Tour boat dispatch uses short operator codes like BW, BWA, FNF, 50/50, SR, SL,
-plus CPT-A / OP-12 style labels. These must not be mixed up.
+Tour boat dispatch uses operator codes like DrmC, BW, BWA, FNF, 50/50, SR, SL.
+These must not be mixed up with port berth codes or auto-generated placeholders.
 """
 
 from __future__ import annotations
@@ -35,18 +35,21 @@ KNOWN_TOUR_BOAT_CODES = frozenset(
         "FNF",
         "SR",
         "SL",
+        "SL",
         "50/50",
+        "DRMC",
     }
 )
 
+PLACEHOLDER_BOAT_CODE_PATTERN = re.compile(r"^CPT-[A-Z]$", re.IGNORECASE)
+
 CAPTAIN_CODE_PATTERN = re.compile(
-    r"^(?:CPT|OP|CAP|BOAT|TB|TOUR)[-_\s]?[A-Z0-9]+",
+    r"^(?:OP|CAP|BOAT|TB|TOUR)[-_\s]?[A-Z0-9]+",
     re.IGNORECASE,
 )
 
 TOUR_BOAT_CODE_PATTERN = re.compile(
-    r"^(?:[A-Z]{2,4}\d?|\d+/\d+)$",
-    re.IGNORECASE,
+    r"^(?:[A-Za-z][A-Za-z0-9]{1,7}|\d+/\d+)$",
 )
 
 
@@ -56,6 +59,11 @@ def normalize_berth(value: str) -> str:
     if text.upper().startswith("BERTH-"):
         return text[6:].strip()
     return text
+
+
+def is_placeholder_boat_code(value: str) -> bool:
+    """Return True for auto-generated CPT-* placeholders (not real tour boats)."""
+    return bool(PLACEHOLDER_BOAT_CODE_PATTERN.match((value or "").strip()))
 
 
 def _is_port_berth_token(text: str) -> bool:
@@ -105,6 +113,9 @@ def is_captain_boat_code(value: str) -> bool:
     if upper.startswith("BERTH-"):
         return False
 
+    if is_placeholder_boat_code(text):
+        return False
+
     if upper in KNOWN_TOUR_BOAT_CODES:
         return True
 
@@ -139,6 +150,9 @@ def repair_boat_berth_value(boat_codes: str | None, berth: str | None) -> tuple[
 
     if boat.upper().startswith("BERTH-"):
         dock = dock or normalize_berth(boat)
+        boat = ""
+
+    if is_placeholder_boat_code(boat):
         boat = ""
 
     if boat and _is_port_berth_token(boat) and not is_captain_boat_code(boat):
