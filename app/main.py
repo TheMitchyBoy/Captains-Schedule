@@ -21,7 +21,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.ai_predictor import clear_ai_prediction_cache
 from app.config import get_openai_status, get_settings, init_openai_verification
 from app.xml_parser import import_schedules
-from app.database import get_db, get_database_path, init_db, DATA_DIR
+from app.database import get_db, get_database_label, get_database_path, init_db, DATA_DIR
 from app.models import CaptainPattern, ScheduleEntry, ShipCapacity, UploadLog
 from app.predictor import (
     get_busy_calendar,
@@ -386,7 +386,6 @@ def storage_status(db: Session = Depends(get_db)):
     start = db.query(func.min(ScheduleEntry.schedule_date)).scalar()
     end = db.query(func.max(ScheduleEntry.schedule_date)).scalar()
     last_upload = db.query(func.max(UploadLog.uploaded_at)).scalar()
-    db_path = get_database_path()
 
     ready = total > 0 and patterns > 0
     if ready:
@@ -400,7 +399,7 @@ def storage_status(db: Session = Depends(get_db)):
         message = "No schedule data yet. Upload one or more XML files to start — data will be saved for future visits."
 
     return StorageStatusOut(
-        database_path=str(db_path),
+        database_path=get_database_label(),
         data_dir=str(DATA_DIR.resolve()),
         total_entries=total,
         uploads=uploads,

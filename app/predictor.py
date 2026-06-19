@@ -27,6 +27,7 @@ from app.ai_predictor import (
     get_ai_ship_names_for_date,
 )
 from app.config import get_settings
+from app.database import sql_day_of_week
 from app.models import CaptainPattern, ScheduleEntry
 from app.scheduler import ShiftCandidate, apply_scheduling_constraints
 from app.schemas import CaptainPrediction, CaptainSummary
@@ -135,10 +136,9 @@ def _predict_ships_for_date(
             return ai_ships
 
     dow = schedule_date.weekday()
-    # SQLite strftime('%w'): 0=Sunday … 6=Saturday; Python weekday(): 0=Monday … 6=Sunday
     historical = (
         db.query(ScheduleEntry.ship, func.count(ScheduleEntry.id).label("cnt"))
-        .filter(func.strftime("%w", ScheduleEntry.schedule_date) == str((dow + 1) % 7))
+        .filter(sql_day_of_week(ScheduleEntry.schedule_date, dow))
         .group_by(ScheduleEntry.ship)
         .order_by(func.count(ScheduleEntry.id).desc())
         .limit(8)
