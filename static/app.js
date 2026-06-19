@@ -145,6 +145,8 @@ function groupPredictionsByShip(rows) {
   }
   return [...groups.values()];
 }
+
+function sourceLabel(source) {
   if (source === "ai") return '<span class="source-badge ai">AI</span>';
   return '<span class="source-badge pattern">Pattern</span>';
 }
