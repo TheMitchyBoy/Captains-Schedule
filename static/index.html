@@ -14,7 +14,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Captain Schedule Predictor</title>
-  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260619" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -159,6 +159,63 @@
         <button type="button" class="btn secondary" id="refreshBtn">Refresh</button>
       </div>
 
+      <section class="card tour-management-section" id="tourManagementSection">
+        <h2>Add Tours Manually</h2>
+        <p class="card-desc">Add missing dispatch rows here. Saved tours appear in <strong>Raw Schedules</strong> below.</p>
+        <form class="schedule-add-form" id="addTourForm">
+          <h3>Add One Tour</h3>
+          <div class="schedule-add-grid">
+            <label>
+              Date
+              <input type="date" id="addTourDate" required />
+            </label>
+            <label>
+              Ship
+              <input type="text" id="addTourShip" placeholder="Carnival Spirit" required />
+            </label>
+            <label>
+              Check-in
+              <input type="text" id="addTourCheckin" placeholder="7am" required />
+            </label>
+            <label>
+              Return
+              <input type="text" id="addTourReturn" placeholder="11:30am" required />
+            </label>
+            <label>
+              Boats
+              <input type="text" id="addTourBoats" placeholder="JR, LewE" />
+            </label>
+            <label>
+              Berth
+              <input type="text" id="addTourBerth" placeholder="2" />
+            </label>
+          </div>
+          <div class="schedule-add-actions">
+            <button type="submit" class="btn" id="addTourBtn">Add Tour</button>
+            <span class="schedule-add-result hidden" id="addTourResult"></span>
+          </div>
+        </form>
+        <form class="schedule-add-form schedule-bulk-form" id="bulkTourForm">
+          <h3>Bulk Add Tours</h3>
+          <p class="schedule-bulk-help">Paste dispatch lines — one tour per line. Use a date header or inline date like <code>5/3</code>.</p>
+          <label class="schedule-bulk-label">
+            Reference year
+            <input type="number" id="bulkTourYear" value="2026" min="2000" max="2100" />
+          </label>
+          <label class="schedule-bulk-label">
+            Tour lines
+            <textarea id="bulkTourText" class="schedule-bulk-text" rows="8" placeholder="Sunday 5/3
+C. Spirit (Carnival Spirit) — JR, LewE — 7am-11:30am
+Eurodam — BW, BWA — 06:30–10:45
+6/4 Koningsdam — DrmC, 50/50 — 11:00–15:15"></textarea>
+          </label>
+          <div class="schedule-add-actions">
+            <button type="submit" class="btn" id="bulkTourBtn">Add All Tours</button>
+            <span class="schedule-add-result hidden" id="bulkTourResult"></span>
+          </div>
+        </form>
+      </section>
+
       <div class="tabs">
         <button class="tab active" data-tab="predictions">Predictions</button>
         <button class="tab" data-tab="captains">Captain Overview</button>
@@ -238,60 +295,29 @@
 
       <section class="tab-panel" id="panel-schedules">
         <div class="card">
-          <h2>Stored Schedules</h2>
-          <p class="card-desc">View, add, or edit tour rows. Use Add Tour for missing dates and dispatch lines, or Edit to fix imports.</p>
-          <form class="schedule-add-form" id="addTourForm">
-            <h3>Add Tour</h3>
-            <div class="schedule-add-grid">
-              <label>
-                Date
-                <input type="date" id="addTourDate" required />
-              </label>
-              <label>
-                Ship
-                <input type="text" id="addTourShip" placeholder="Carnival Spirit" required />
-              </label>
-              <label>
-                Check-in
-                <input type="text" id="addTourCheckin" placeholder="7am" required />
-              </label>
-              <label>
-                Return
-                <input type="text" id="addTourReturn" placeholder="11:30am" required />
-              </label>
-              <label>
-                Boats
-                <input type="text" id="addTourBoats" placeholder="JR, LewE" />
-              </label>
-              <label>
-                Berth
-                <input type="text" id="addTourBerth" placeholder="2" />
-              </label>
-            </div>
-            <div class="schedule-add-actions">
-              <button type="submit" class="btn" id="addTourBtn">Add Tour</button>
-              <span class="schedule-add-result hidden" id="addTourResult"></span>
-            </div>
-          </form>
-          <form class="schedule-add-form schedule-bulk-form" id="bulkTourForm">
-            <h3>Bulk Add Tours</h3>
-            <p class="schedule-bulk-help">Paste dispatch lines — one tour per line. Use a date header or inline date like <code>5/3</code>.</p>
-            <label class="schedule-bulk-label">
-              Reference year
-              <input type="number" id="bulkTourYear" value="2026" min="2000" max="2100" />
+          <h2>Raw Schedules</h2>
+          <p class="card-desc">All saved tour rows from uploads and manual entry. Newest dates appear first.</p>
+          <div class="schedule-table-controls">
+            <label>
+              Ship filter
+              <input type="text" id="scheduleFilterShip" placeholder="Carnival Spirit" />
             </label>
-            <label class="schedule-bulk-label">
-              Tour lines
-              <textarea id="bulkTourText" class="schedule-bulk-text" rows="8" placeholder="Sunday 5/3
-C. Spirit (Carnival Spirit) — JR, LewE — 7am-11:30am
-Eurodam — BW, BWA — 06:30–10:45
-6/4 Koningsdam — DrmC, 50/50 — 11:00–15:15"></textarea>
+            <label>
+              From
+              <input type="date" id="scheduleFilterStart" />
             </label>
-            <div class="schedule-add-actions">
-              <button type="submit" class="btn" id="bulkTourBtn">Add All Tours</button>
-              <span class="schedule-add-result hidden" id="bulkTourResult"></span>
-            </div>
-          </form>
+            <label>
+              To
+              <input type="date" id="scheduleFilterEnd" />
+            </label>
+            <label class="schedule-filter-check">
+              <input type="checkbox" id="scheduleFilterManual" />
+              Manual entries only
+            </label>
+            <button type="button" class="btn secondary btn-sm" id="scheduleFilterBtn">Apply Filters</button>
+            <button type="button" class="btn secondary btn-sm" id="scheduleFilterClearBtn">Clear</button>
+          </div>
+          <p class="schedule-table-meta" id="scheduleTableMeta">Loading schedules…</p>
           <div class="table-wrap">
             <table>
               <thead>
@@ -303,11 +329,12 @@ Eurodam — BW, BWA — 06:30–10:45
                   <th>Return</th>
                   <th>Berth</th>
                   <th>Boat / Captain</th>
+                  <th>Source</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody id="schedulesBody">
-                <tr><td colspan="8" class="empty">No schedules stored</td></tr>
+                <tr><td colspan="9" class="empty">No schedules stored</td></tr>
               </tbody>
             </table>
           </div>
@@ -320,6 +347,6 @@ Eurodam — BW, BWA — 06:30–10:45
     </footer>
   </div>
 
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=20260619"></script>
 </body>
 </html>

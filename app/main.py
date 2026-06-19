@@ -403,6 +403,8 @@ def list_schedules(
     end_date: date | None = None,
     ship: str | None = None,
     boat_code: str | None = None,
+    manual_only: bool = Query(default=False, description="Only rows added manually in the dashboard"),
+    order: str = Query(default="desc", pattern="^(asc|desc)$"),
     limit: int = Query(default=500, le=2000),
     db: Session = Depends(get_db),
 ):
@@ -416,8 +418,15 @@ def list_schedules(
         q = q.filter(ScheduleEntry.ship.ilike(f"%{ship}%"))
     if boat_code:
         q = q.filter(ScheduleEntry.boat_codes.ilike(f"%{boat_code}%"))
+    if manual_only:
+        q = q.filter(ScheduleEntry.upload_batch_id.like("manual%"))
 
-    return q.order_by(ScheduleEntry.schedule_date, ScheduleEntry.checkin_time).limit(limit).all()
+    if order == "desc":
+        q = q.order_by(ScheduleEntry.schedule_date.desc(), ScheduleEntry.checkin_time.desc())
+    else:
+        q = q.order_by(ScheduleEntry.schedule_date, ScheduleEntry.checkin_time)
+
+    return q.limit(limit).all()
 
 
 @app.post("/api/schedules", response_model=ScheduleEntryOut, status_code=201)

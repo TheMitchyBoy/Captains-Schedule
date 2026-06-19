@@ -143,11 +143,46 @@ function escapeAttr(value) {
 
 let scheduleRows = [];
 let editingScheduleId = null;
+let highlightScheduleId = null;
+let scheduleTotalEntries = 0;
+
+function scheduleSourceLabel(uploadBatchId) {
+  if (uploadBatchId && uploadBatchId.startsWith("manual")) {
+    return '<span class="source-badge manual">Manual</span>';
+  }
+  return '<span class="source-badge upload">Upload</span>';
+}
+
+function buildSchedulesQuery() {
+  const params = new URLSearchParams({ limit: "2000", order: "desc" });
+  const ship = $("#scheduleFilterShip")?.value.trim();
+  const start = $("#scheduleFilterStart")?.value;
+  const end = $("#scheduleFilterEnd")?.value;
+  const manualOnly = $("#scheduleFilterManual")?.checked;
+  if (ship) params.set("ship", ship);
+  if (start) params.set("start_date", start);
+  if (end) params.set("end_date", end);
+  if (manualOnly) params.set("manual_only", "true");
+  return `/api/schedules?${params.toString()}`;
+}
+
+function showSchedulesTab(entryId) {
+  switchTab("schedules");
+  highlightScheduleId = entryId ?? null;
+  renderSchedulesTable();
+  if (entryId) {
+    const row = document.querySelector(`#schedulesBody tr[data-id="${entryId}"]`);
+    row?.scrollIntoView({ behavior: "smooth", block: "center" });
+  } else {
+    $("#panel-schedules")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
 
 function renderScheduleRow(s) {
+  const highlightClass = highlightScheduleId === s.id ? " schedule-row-highlight" : "";
   if (editingScheduleId === s.id) {
     return `
-      <tr class="schedule-row-editing" data-id="${s.id}">
+      <tr class="schedule-row-editing${highlightClass}" data-id="${s.id}">
         <td>${formatDate(s.schedule_date)}</td>
         <td>${s.date_header}</td>
         <td>${s.ship}</td>
@@ -155,6 +190,7 @@ function renderScheduleRow(s) {
         <td><input type="text" class="schedule-edit-input" data-field="return_time" value="${escapeAttr(s.return_time)}" aria-label="Return time" /></td>
         <td>${s.berth ? `<code>${s.berth}</code>` : "—"}</td>
         <td><input type="text" class="schedule-edit-input schedule-edit-boats" data-field="boat_codes" value="${escapeAttr(s.boat_codes)}" placeholder="BW, BWA, JR" aria-label="Boat codes" /></td>
+        <td>${scheduleSourceLabel(s.upload_batch_id)}</td>
         <td class="schedule-actions">
           <button type="button" class="btn btn-sm schedule-save-btn" data-id="${s.id}">Save</button>
           <button type="button" class="btn secondary btn-sm schedule-cancel-btn" data-id="${s.id}">Cancel</button>
@@ -162,7 +198,7 @@ function renderScheduleRow(s) {
       </tr>`;
   }
   return `
-    <tr data-id="${s.id}">
+    <tr class="${highlightClass.trim()}" data-id="${s.id}">
       <td>${formatDate(s.schedule_date)}</td>
       <td>${s.date_header}</td>
       <td>${s.ship}</td>
@@ -170,19 +206,35 @@ function renderScheduleRow(s) {
       <td>${s.return_time}</td>
       <td>${s.berth ? `<code>${s.berth}</code>` : "—"}</td>
       <td>${formatBoatCodes(s.boat_codes)}</td>
+      <td>${scheduleSourceLabel(s.upload_batch_id)}</td>
       <td class="schedule-actions">
         <button type="button" class="btn secondary btn-sm schedule-edit-btn" data-id="${s.id}">Edit</button>
       </td>
     </tr>`;
 }
 
+function updateScheduleTableMeta() {
+  const meta = $("#scheduleTableMeta");
+  if (!meta) return;
+  if (!scheduleRows.length) {
+    meta.textContent = scheduleTotalEntries
+      ? `No rows match the current filters (${scheduleTotalEntries.toLocaleString()} total in database)`
+      : "No schedules stored yet — add tours above or upload a file";
+    return;
+  }
+  const manualCount = scheduleRows.filter((s) => s.upload_batch_id?.startsWith("manual")).length;
+  meta.textContent = `Showing ${scheduleRows.length.toLocaleString()} row(s)${scheduleTotalEntries ? ` of ${scheduleTotalEntries.toLocaleString()} total` : ""}${manualCount ? ` · ${manualCount} manual in this view` : ""}`;
+}
+
 function renderSchedulesTable() {
   const tbody = $("#schedulesBody");
   if (!scheduleRows.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="empty">No schedules stored</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="empty">No schedules match the current filters</td></tr>';
+    updateScheduleTableMeta();
     return;
   }
   tbody.innerHTML = scheduleRows.map(renderScheduleRow).join("");
+  updateScheduleTableMeta();
 }
 
 async function saveScheduleEdit(id) {
@@ -274,15 +326,16 @@ async function addTour(event) {
     const created = await res.json();
 
     resultEl.classList.add("success");
-    resultEl.textContent = `Added ${created.ship} on ${formatDate(created.schedule_date)}`;
+    resultEl.textContent = `Added ${created.ship} on ${formatDate(created.schedule_date)} — opening Raw Schedules`;
 
     $("#addTourCheckin").value = "";
     $("#addTourReturn").value = "";
     $("#addTourBoats").value = "";
     $("#addTourBerth").value = "";
 
+    await loadSchedules();
+    showSchedulesTab(created.id);
     await Promise.all([
-      loadSchedules(),
       loadStats(),
       loadPredictions(),
       loadCaptainOverview(),
@@ -343,8 +396,9 @@ async function bulkAddTours(event) {
     resultEl.textContent = message;
 
     if (data.rows_created || data.rows_merged) {
+      await loadSchedules();
+      showSchedulesTab();
       await Promise.all([
-        loadSchedules(),
         loadStats(),
         loadPredictions(),
         loadCaptainOverview(),
@@ -363,6 +417,28 @@ function setupBulkTourForm() {
   const form = $("#bulkTourForm");
   if (!form) return;
   form.addEventListener("submit", bulkAddTours);
+}
+
+function setupScheduleFilters() {
+  $("#scheduleFilterBtn")?.addEventListener("click", () => {
+    highlightScheduleId = null;
+    loadSchedules();
+  });
+  $("#scheduleFilterClearBtn")?.addEventListener("click", () => {
+    $("#scheduleFilterShip").value = "";
+    $("#scheduleFilterStart").value = "";
+    $("#scheduleFilterEnd").value = "";
+    $("#scheduleFilterManual").checked = false;
+    highlightScheduleId = null;
+    loadSchedules();
+  });
+  $("#scheduleFilterShip")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      highlightScheduleId = null;
+      loadSchedules();
+    }
+  });
 }
 
 function groupPredictionsByShip(rows) {
@@ -532,11 +608,17 @@ async function loadUploads() {
 
 async function loadSchedules() {
   try {
-    scheduleRows = await fetchJSON("/api/schedules?limit=200");
-    editingScheduleId = null;
+    const [rows, stats] = await Promise.all([
+      fetchJSON(buildSchedulesQuery()),
+      fetchJSON("/api/stats").catch(() => ({ total_entries: 0 })),
+    ]);
+    scheduleRows = rows;
+    scheduleTotalEntries = stats.total_entries || rows.length;
     renderSchedulesTable();
   } catch (e) {
-    $("#schedulesBody").innerHTML = '<tr><td colspan="8" class="empty">Error loading schedules</td></tr>';
+    $("#schedulesBody").innerHTML = '<tr><td colspan="9" class="empty">Error loading schedules</td></tr>';
+    const meta = $("#scheduleTableMeta");
+    if (meta) meta.textContent = "Could not load schedules";
   }
 }
 
@@ -902,6 +984,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupScheduleEditing();
   setupAddTourForm();
   setupBulkTourForm();
+  setupScheduleFilters();
   refreshAll();
   // Focus raw input so users can paste immediately
   $("#rawXmlInput").focus();
