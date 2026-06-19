@@ -27,7 +27,7 @@
           <div class="brand-icon">⚓</div>
           <div>
             <h1>Captain Schedule Predictor</h1>
-            <p class="subtitle">Clean dispatch XML · Send to predictions · Forecast captain work days</p>
+            <p class="subtitle">Upload once · Data saved to database · Predict anytime</p>
           </div>
         </div>
         <div class="stats-bar" id="statsBar">
@@ -35,8 +35,10 @@
           <div class="stat"><span class="stat-value" id="statShips">—</span><span class="stat-label">Ships</span></div>
           <div class="stat"><span class="stat-value" id="statCaptains">—</span><span class="stat-label">Captains</span></div>
           <div class="stat"><span class="stat-value" id="statRange">—</span><span class="stat-label">Date Range</span></div>
+          <div class="stat"><span class="stat-value" id="statUploads">—</span><span class="stat-label">Uploads</span></div>
         </div>
       </div>
+      <div id="storageBanner" class="storage-banner hidden"></div>
     </header>
 
     <main class="main">
@@ -45,7 +47,7 @@
         <div class="hero-header">
           <div>
             <h2>Clean Dispatch XML</h2>
-            <p class="card-desc">Paste raw XML below, repair times and boat fields, then send the cleaned file to the prediction generator</p>
+            <p class="card-desc">Optional: clean and repair raw XML before import. You can also upload files directly to the database below — uploads accumulate and are saved permanently.</p>
           </div>
           <div id="aiStatusBadge" class="ai-badge">Checking AI status...</div>
         </div>
@@ -88,6 +90,17 @@
           <button type="button" class="btn primary-action" id="pushPredictionsBtn" disabled>Send to Prediction Generator →</button>
         </div>
         <div id="pushResult" class="upload-result hidden"></div>
+
+        <div class="upload-divider">
+          <span>or upload directly to the saved database</span>
+        </div>
+
+        <div class="direct-upload-row">
+          <input type="file" id="directUploadInput" accept=".xml,text/xml,application/xml" multiple hidden />
+          <button type="button" class="btn" id="directUploadBtn">Upload XML File(s) to Database</button>
+          <span class="direct-upload-hint">Adds new rows · skips duplicates · no need to re-upload on future visits</span>
+        </div>
+        <div id="directUploadResult" class="upload-result hidden"></div>
       </section>
 
       <div class="controls card">
@@ -130,7 +143,7 @@
       <section class="tab-panel active" id="panel-predictions">
         <div class="card">
           <h2>Future Captain Shifts</h2>
-          <p class="card-desc">Predicted work days with scheduling rules: one boat per ship, no overlapping captain shifts, alphabetical dispatch, 3-hour turnaround between tours. OpenAI can forecast ships and suggest assignments when enabled.</p>
+          <p class="card-desc">Predictions load automatically from saved database history. Upload more XML anytime to extend the forecast.</p>
           <div id="predictionsAiBanner" class="repair-summary hidden"></div>
           <div class="table-wrap">
             <table>
@@ -148,7 +161,7 @@
                 </tr>
               </thead>
               <tbody id="predictionsBody">
-                <tr><td colspan="9" class="empty">Clean XML above and click Send to Prediction Generator</td></tr>
+                <tr><td colspan="9" class="empty">Upload XML to build history, or open the app later — saved data loads automatically</td></tr>
               </tbody>
             </table>
           </div>
@@ -176,6 +189,7 @@
       <section class="tab-panel" id="panel-history">
         <div class="card">
           <h2>Upload History</h2>
+          <p class="card-desc">Every import is logged. Data stays in the database across restarts — you only need to upload when you receive new dispatch schedules.</p>
           <div class="table-wrap">
             <table>
               <thead>
@@ -198,6 +212,7 @@
       <section class="tab-panel" id="panel-schedules">
         <div class="card">
           <h2>Stored Schedules</h2>
+          <p class="card-desc">All schedule rows saved in the database from every upload</p>
           <div class="table-wrap">
             <table>
               <thead>

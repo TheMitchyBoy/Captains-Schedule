@@ -108,6 +108,24 @@ class StatsOut(BaseModel):
     date_range_start: date | None
     date_range_end: date | None
     uploads: int
+    patterns_learned: int = 0
+    last_upload_at: datetime | None = None
+    has_stored_data: bool = False
+
+
+class StorageStatusOut(BaseModel):
+    """Persistence status — confirms data survives server restarts."""
+
+    database_path: str
+    data_dir: str
+    total_entries: int
+    uploads: int
+    patterns_learned: int
+    date_range_start: date | None
+    date_range_end: date | None
+    last_upload_at: datetime | None
+    ready_for_predictions: bool
+    message: str
 
 
 class ShipCapacityOut(BaseModel):

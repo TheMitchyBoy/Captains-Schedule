@@ -1,10 +1,10 @@
 /**
  * Captain Schedule Predictor — frontend dashboard logic.
  *
- * Primary workflow:
- *   1. Paste or load raw dispatch XML on the landing Clean XML section
- *   2. Clean & repair (times, boat fields, AI recovery)
- *   3. Send cleaned XML to the prediction generator
+ * Workflow:
+ *   - Upload XML once (or a few times) — data is saved to SQLite permanently
+ *   - Return anytime: predictions load from the database without re-uploading
+ *   - Optional: clean/repair raw XML before import
  */
 const API = "";
 
@@ -85,6 +85,7 @@ async function loadStats() {
     $("#statEntries").textContent = s.total_entries.toLocaleString();
     $("#statShips").textContent = s.unique_ships;
     $("#statCaptains").textContent = s.unique_captains;
+    $("#statUploads").textContent = s.uploads ?? "—";
     if (s.date_range_start && s.date_range_end) {
       $("#statRange").textContent =
         formatDate(s.date_range_start) + " – " + formatDate(s.date_range_end);
@@ -93,6 +94,27 @@ async function loadStats() {
     }
   } catch (e) {
     console.error("Stats error:", e);
+  }
+}
+
+async function loadStorageStatus() {
+  const banner = $("#storageBanner");
+  if (!banner) return;
+  try {
+    const s = await fetchJSON("/api/storage");
+    banner.classList.remove("hidden", "ready", "empty");
+    if (s.ready_for_predictions) {
+      banner.classList.add("ready");
+      const last = s.last_upload_at
+        ? `Last upload: ${new Date(s.last_upload_at).toLocaleString()}`
+        : "";
+      banner.innerHTML = `<strong>Database ready.</strong> ${s.total_entries.toLocaleString()} schedule rows saved · ${s.patterns_learned} patterns learned · ${s.uploads} upload(s). ${last} — open anytime for predictions without re-uploading.`;
+    } else {
+      banner.classList.add("empty");
+      banner.innerHTML = `<strong>No saved data yet.</strong> ${s.message}`;
+    }
+  } catch (e) {
+    banner.classList.add("hidden");
   }
 }
 
@@ -151,7 +173,7 @@ async function loadPredictions() {
     const data = resp.predictions || resp;
     showAiPredictionBanner(resp.ai);
     if (!data.length) {
-      tbody.innerHTML = '<tr><td colspan="9" class="empty">No predictions yet — clean XML above and click Send to Prediction Generator</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" class="empty">No predictions yet — upload XML above to save schedule data to the database</td></tr>';
       return;
     }
     tbody.innerHTML = data.slice(0, 200).map((p) => `
@@ -296,8 +318,49 @@ async function loadAiStatus() {
   }
 }
 
+/** Upload a File object directly to the database (skips clean step). */
+async function uploadFileToDatabase(file) {
+  const form = new FormData();
+  form.append("file", file, file.name || "upload.xml");
+  const res = await fetch(API + "/api/upload", { method: "POST", body: form });
+  if (!res.ok) {
+    throw new Error(await readErrorDetail(res));
+  }
+  return res.json();
+}
+
+/** Upload one or more XML files straight to the persistent database. */
+async function directUploadFiles(fileList) {
+  const resultEl = $("#directUploadResult");
+  const files = Array.from(fileList || []);
+  if (!files.length) return;
+
+  resultEl.classList.remove("hidden", "success", "error");
+  resultEl.textContent = `Uploading ${files.length} file(s) to database...`;
+  $("#directUploadBtn").disabled = true;
+
+  const summaries = [];
+  try {
+    for (const file of files) {
+      const data = await uploadFileToDatabase(file);
+      summaries.push(`${file.name}: +${data.rows_imported} new, ${data.rows_skipped} existing`);
+    }
+    resultEl.classList.add("success");
+    resultEl.textContent = "✓ Saved to database — " + summaries.join(" · ");
+    await refreshAll();
+    switchTab("predictions");
+  } catch (e) {
+    resultEl.classList.add("error");
+    resultEl.textContent = "Upload failed: " + e.message;
+  } finally {
+    $("#directUploadBtn").disabled = false;
+    $("#directUploadInput").value = "";
+  }
+}
+
 async function refreshAll() {
   await Promise.all([
+    loadStorageStatus(),
     loadStats(),
     loadAiStatus(),
     loadCaptainsFilter(),
@@ -427,6 +490,13 @@ async function pasteFromClipboard() {
   }
 }
 
+function setupDirectUpload() {
+  $("#directUploadBtn").addEventListener("click", () => $("#directUploadInput").click());
+  $("#directUploadInput").addEventListener("change", () => {
+    directUploadFiles($("#directUploadInput").files);
+  });
+}
+
 function setupRepair() {
   $("#cleanXmlBtn").addEventListener("click", () => {
     const xml = $("#rawXmlInput").value.trim();
@@ -504,6 +574,7 @@ function setupControls() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  setupDirectUpload();
   setupRepair();
   setupTabs();
   setupControls();

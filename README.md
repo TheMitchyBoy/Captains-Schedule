@@ -5,7 +5,7 @@ Upload cruise dispatch XML schedules, store them in a SQLite database, and predi
 ## Features
 
 - **XML upload** — Drag-and-drop dispatch schedules with elements: `date_header`, `ship`, `checkin_time`, `return_time`, `boat_codes`
-- **Persistent database** — Every upload is stored and deduplicated; patterns improve with more data
+- **Persistent database** — Upload XML a few times; all schedule data is saved to SQLite. Return anytime and predictions load automatically — no need to re-upload every day
 - **Captain predictions** — Learns day-of-week patterns per captain/boat code and forecasts shifts up to 365 days ahead
 - **Busy day calendar** — Estimates port busyness using passenger capacity data for 100+ major cruise ships
 - **XML repair tool** — Re-parse raw XML, normalize times to 24-hour `HH:MM`, and fix corrupted boat fields (`15am:`, `30am:`, `15pm:`, `30pm:`)
@@ -104,6 +104,7 @@ Optional AI-assisted recovery for badly malformed XML runs automatically when `O
 | GET    | `/api/captains`       | Captain overview with next shift     |
 | GET    | `/api/busy-calendar`  | Daily busyness estimates             |
 | GET    | `/api/ships`          | Ship capacity registry               |
+| GET    | `/api/storage`        | Database persistence status          |
 | GET    | `/api/stats`          | Database statistics                  |
 | POST   | `/api/patterns/rebuild` | Rebuild learned patterns           |
 
@@ -117,16 +118,31 @@ Interactive API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
 4. **Scheduling constraints** — Predictions enforce one boat per ship at a time, no overlapping captain shifts, alphabetical boat dispatch, and a 3-hour minimum between consecutive tours for the same boat
 5. **Busy day weighting** — Ship passenger counts (from a built-in registry of major cruise lines) estimate how busy each day will be
 
-The more XML data you upload over time, the more accurate and far-reaching the predictions become.
+The more XML data you upload over time, the more accurate and far-reaching the predictions become. **You do not need to re-upload the same files daily** — data persists in the database across restarts.
 
-## Database
+## Database & Persistence
 
-Data is stored in `captain_scheduler.db` (SQLite) with tables for:
+Schedule data is stored in **`data/captain_scheduler.db`** (SQLite) by default. Tables:
 
-- `schedule_entries` — Raw uploaded schedule rows
+- `schedule_entries` — Raw uploaded schedule rows (accumulates across uploads)
 - `captain_patterns` — Learned day-of-week assignment patterns
 - `ship_capacities` — Cruise ship passenger counts
 - `upload_logs` — Upload history and import stats
+
+**Upload workflow:**
+1. Upload one or more XML files (direct upload or clean-then-send)
+2. New rows are saved; duplicates are skipped automatically
+3. Close the app and come back later — predictions use saved data
+
+**Configure storage location** (for Docker/cloud with a mounted volume):
+
+```bash
+export DATA_DIR=/mnt/persistent/captain-scheduler
+# or
+export DATABASE_URL=sqlite:////mnt/persistent/captain-scheduler.db
+```
+
+Check persistence status: `GET /api/storage`
 
 ## Ship Capacity Data
 
