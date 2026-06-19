@@ -24,6 +24,8 @@ class BulkCreateResult:
     rows_merged: int
     rows_skipped: int
     errors: list[str]
+    ai_assisted: bool = False
+    ai_message: str | None = None
 
 
 def _build_date_header(schedule_date: date) -> str:
@@ -184,6 +186,8 @@ def bulk_create_schedule_entries(
     db: Session,
     text: str,
     schedule_date: date,
+    *,
+    use_ai: bool = True,
 ) -> BulkCreateResult:
     """Parse dispatch-style tour lines for one day and add them to the database."""
     rows, parse_errors = parse_tour_lines_from_text(
@@ -191,12 +195,26 @@ def bulk_create_schedule_entries(
         schedule_date.year,
         fixed_date=schedule_date,
     )
+    ai_assisted = False
+    ai_message: str | None = None
+
+    if not rows and use_ai:
+        from app.ai_tour_parser import ai_parse_tour_lines
+
+        ai_rows, ai_message = ai_parse_tour_lines(text, schedule_date)
+        if ai_rows:
+            rows = ai_rows
+            ai_assisted = True
+            parse_errors = []
+        elif ai_message and not parse_errors:
+            parse_errors = [ai_message]
+
     batch_id = f"manual-bulk-{uuid.uuid4()}"
 
     created = merged = skipped = 0
     errors = list(parse_errors)
 
-    if not rows and not parse_errors:
+    if not rows and not errors:
         errors.append("No tour lines found in the pasted text")
 
     for row in rows:
@@ -233,6 +251,8 @@ def bulk_create_schedule_entries(
         rows_merged=merged,
         rows_skipped=skipped,
         errors=errors,
+        ai_assisted=ai_assisted,
+        ai_message=ai_message,
     )
 
 

@@ -464,12 +464,17 @@ def create_schedules_bulk(
     if not text:
         raise HTTPException(status_code=400, detail="Paste one or more tour lines to import")
 
-    result = bulk_create_schedule_entries(db, text, payload.schedule_date)
+    result = bulk_create_schedule_entries(
+        db,
+        text,
+        payload.schedule_date,
+        use_ai=payload.use_ai,
+    )
     if result.rows_created == 0 and result.rows_merged == 0 and not result.rows_parsed:
-        raise HTTPException(
-            status_code=400,
-            detail=result.errors[0] if result.errors else "No tour lines could be imported",
-        )
+        detail = result.errors[0] if result.errors else "No tour lines could be imported"
+        if result.ai_message and result.ai_message not in detail:
+            detail = f"{detail}. {result.ai_message}"
+        raise HTTPException(status_code=400, detail=detail)
 
     if result.rows_created or result.rows_merged:
         rebuild_patterns(db)
@@ -481,6 +486,8 @@ def create_schedules_bulk(
         rows_merged=result.rows_merged,
         rows_skipped=result.rows_skipped,
         errors=result.errors,
+        ai_assisted=result.ai_assisted,
+        ai_message=result.ai_message,
     )
 
 

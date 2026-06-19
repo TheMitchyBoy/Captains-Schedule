@@ -472,6 +472,10 @@ tr.schedule-row-editing td {
   letter-spacing: normal;
 }
 
+.schedule-bulk-ai {
+  margin-bottom: 0.5rem;
+}
+
 .schedule-bulk-text {
   width: 100%;
   background: var(--surface);

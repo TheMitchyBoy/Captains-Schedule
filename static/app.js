@@ -378,13 +378,17 @@ async function bulkAddTours(event) {
 
   submitBtn.disabled = true;
   resultEl.classList.remove("hidden", "success", "error");
-  resultEl.textContent = "Importing tours...";
+  resultEl.textContent = "Importing tours…";
 
   try {
     const res = await fetch(API + "/api/schedules/bulk", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ schedule_date: scheduleDate, text }),
+      body: JSON.stringify({
+        schedule_date: scheduleDate,
+        text,
+        use_ai: $("#bulkTourUseAi")?.checked !== false,
+      }),
     });
     if (!res.ok) throw new Error(await readErrorDetail(res));
     const data = await res.json();
@@ -396,6 +400,9 @@ async function bulkAddTours(event) {
 
     resultEl.classList.add(data.errors?.length ? "error" : "success");
     let message = parts.length ? parts.join(", ") : "No new tours imported";
+    if (data.ai_assisted && data.ai_message) {
+      message += ` · ${data.ai_message}`;
+    }
     if (data.errors?.length) {
       message += ` · ${data.errors.length} issue(s): ${data.errors.slice(0, 2).join("; ")}`;
       if (data.errors.length > 2) message += "…";

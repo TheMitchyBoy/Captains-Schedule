@@ -54,6 +54,7 @@ class ScheduleBulkCreate(BaseModel):
 
     schedule_date: date
     text: str
+    use_ai: bool = True
 
 
 class ScheduleBulkResult(BaseModel):
@@ -64,6 +65,8 @@ class ScheduleBulkResult(BaseModel):
     rows_merged: int
     rows_skipped: int
     errors: list[str] = []
+    ai_assisted: bool = False
+    ai_message: str | None = None
 
 
 class UploadResult(BaseModel):

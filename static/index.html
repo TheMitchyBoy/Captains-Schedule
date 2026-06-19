@@ -14,7 +14,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Captain Schedule Predictor</title>
-  <link rel="stylesheet" href="/static/styles.css?v=20260620" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260621" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -197,7 +197,7 @@
         </form>
         <form class="schedule-add-form schedule-bulk-form" id="bulkTourForm">
           <h3>Bulk Add Tours for One Day</h3>
-          <p class="schedule-bulk-help">Pick a date, then paste one tour per line — no date needed on each line.</p>
+          <p class="schedule-bulk-help">Pick a date, then paste tour info — one ship per line, or messy notes/SMS. If the format isn't recognized, AI will try to decode it automatically.</p>
           <label class="schedule-bulk-label schedule-bulk-date">
             Date
             <input type="date" id="bulkTourDate" required />
@@ -208,6 +208,10 @@
 Eurodam — BW, BWA — 06:30–10:45
 Koningsdam — DrmC, 50/50 — 11:00–15:15
 Island — BW, BWA at 6:15am-10:30am"></textarea>
+          </label>
+          <label class="schedule-filter-check schedule-bulk-ai">
+            <input type="checkbox" id="bulkTourUseAi" checked />
+            Use AI to decode unrecognized text
           </label>
           <div class="schedule-add-actions">
             <button type="submit" class="btn" id="bulkTourBtn">Add All Tours for This Day</button>
@@ -347,6 +351,6 @@ Island — BW, BWA at 6:15am-10:30am"></textarea>
     </footer>
   </div>
 
-  <script src="/static/app.js?v=20260620"></script>
+  <script src="/static/app.js?v=20260621"></script>
 </body>
 </html>
