@@ -39,6 +39,7 @@ from app.schemas import (
     PredictionsResponse,
     ScheduleEntryOut,
     ScheduleEntryUpdate,
+    ScheduleEntryCreate,
     ShipCapacityOut,
     StatsOut,
     StorageStatusOut,
@@ -48,7 +49,7 @@ from app.schemas import (
 )
 from app.schedule_repair import repair_schedule_berth_mixups
 from app.schedule_dedup import deduplicate_schedule_entries
-from app.schedule_update import update_schedule_entry
+from app.schedule_update import create_schedule_entry, update_schedule_entry
 from app.ship_data import lookup_ship_online, seed_ship_capacities
 from app.xml_cleaner import clean_xml_content
 
@@ -415,6 +416,31 @@ def list_schedules(
         q = q.filter(ScheduleEntry.boat_codes.ilike(f"%{boat_code}%"))
 
     return q.order_by(ScheduleEntry.schedule_date, ScheduleEntry.checkin_time).limit(limit).all()
+
+
+@app.post("/api/schedules", response_model=ScheduleEntryOut, status_code=201)
+def create_schedule(
+    payload: ScheduleEntryCreate,
+    db: Session = Depends(get_db),
+):
+    """Add a new tour row for a date, ship, and time slot."""
+    try:
+        entry = create_schedule_entry(
+            db,
+            schedule_date=payload.schedule_date,
+            ship=payload.ship,
+            checkin_time=payload.checkin_time,
+            return_time=payload.return_time,
+            boat_codes=payload.boat_codes,
+            berth=payload.berth,
+            date_header=payload.date_header,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    rebuild_patterns(db)
+    clear_ai_prediction_cache()
+    return entry
 
 
 @app.patch("/api/schedules/{entry_id}", response_model=ScheduleEntryOut)

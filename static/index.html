@@ -239,7 +239,40 @@
       <section class="tab-panel" id="panel-schedules">
         <div class="card">
           <h2>Stored Schedules</h2>
-          <p class="card-desc">All schedule rows saved in the database. Click Edit to fix boat codes or times when imports need correction.</p>
+          <p class="card-desc">View, add, or edit tour rows. Use Add Tour for missing dates and dispatch lines, or Edit to fix imports.</p>
+          <form class="schedule-add-form" id="addTourForm">
+            <h3>Add Tour</h3>
+            <div class="schedule-add-grid">
+              <label>
+                Date
+                <input type="date" id="addTourDate" required />
+              </label>
+              <label>
+                Ship
+                <input type="text" id="addTourShip" placeholder="Carnival Spirit" required />
+              </label>
+              <label>
+                Check-in
+                <input type="text" id="addTourCheckin" placeholder="7am" required />
+              </label>
+              <label>
+                Return
+                <input type="text" id="addTourReturn" placeholder="11:30am" required />
+              </label>
+              <label>
+                Boats
+                <input type="text" id="addTourBoats" placeholder="JR, LewE" />
+              </label>
+              <label>
+                Berth
+                <input type="text" id="addTourBerth" placeholder="2" />
+              </label>
+            </div>
+            <div class="schedule-add-actions">
+              <button type="submit" class="btn" id="addTourBtn">Add Tour</button>
+              <span class="schedule-add-result hidden" id="addTourResult"></span>
+            </div>
+          </form>
           <div class="table-wrap">
             <table>
               <thead>

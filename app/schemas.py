@@ -37,6 +37,18 @@ class ScheduleEntryUpdate(BaseModel):
     boat_codes: str | None = None
 
 
+class ScheduleEntryCreate(BaseModel):
+    """Fields for POST /api/schedules to add a new tour manually."""
+
+    schedule_date: date
+    ship: str
+    checkin_time: str
+    return_time: str
+    boat_codes: str = ""
+    berth: str | None = None
+    date_header: str | None = None
+
+
 class UploadResult(BaseModel):
     """Summary returned after a successful XML upload."""
 

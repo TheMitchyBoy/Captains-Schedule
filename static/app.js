@@ -240,6 +240,68 @@ function setupScheduleEditing() {
   });
 }
 
+async function addTour(event) {
+  event.preventDefault();
+  const resultEl = $("#addTourResult");
+  const submitBtn = $("#addTourBtn");
+  const payload = {
+    schedule_date: $("#addTourDate").value,
+    ship: $("#addTourShip").value.trim(),
+    checkin_time: $("#addTourCheckin").value.trim(),
+    return_time: $("#addTourReturn").value.trim(),
+    boat_codes: $("#addTourBoats").value.trim(),
+    berth: $("#addTourBerth").value.trim() || null,
+  };
+
+  if (!payload.schedule_date || !payload.ship || !payload.checkin_time || !payload.return_time) {
+    resultEl.classList.remove("hidden", "success");
+    resultEl.classList.add("error");
+    resultEl.textContent = "Date, ship, check-in, and return are required";
+    return;
+  }
+
+  submitBtn.disabled = true;
+  resultEl.classList.remove("hidden", "success", "error");
+  resultEl.textContent = "Saving tour...";
+
+  try {
+    const res = await fetch(API + "/api/schedules", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(await readErrorDetail(res));
+    const created = await res.json();
+
+    resultEl.classList.add("success");
+    resultEl.textContent = `Added ${created.ship} on ${formatDate(created.schedule_date)}`;
+
+    $("#addTourCheckin").value = "";
+    $("#addTourReturn").value = "";
+    $("#addTourBoats").value = "";
+    $("#addTourBerth").value = "";
+
+    await Promise.all([
+      loadSchedules(),
+      loadStats(),
+      loadPredictions(),
+      loadCaptainOverview(),
+      loadCalendar(),
+    ]);
+  } catch (e) {
+    resultEl.classList.add("error");
+    resultEl.textContent = "Could not add tour: " + e.message;
+  } finally {
+    submitBtn.disabled = false;
+  }
+}
+
+function setupAddTourForm() {
+  const form = $("#addTourForm");
+  if (!form) return;
+  form.addEventListener("submit", addTour);
+}
+
 function groupPredictionsByShip(rows) {
   const groups = new Map();
   for (const row of rows) {
@@ -775,6 +837,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupTabs();
   setupControls();
   setupScheduleEditing();
+  setupAddTourForm();
   refreshAll();
   // Focus raw input so users can paste immediately
   $("#rawXmlInput").focus();

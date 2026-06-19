@@ -364,6 +364,67 @@ tr.schedule-row-editing td {
   background: rgba(59, 130, 246, 0.08);
 }
 
+.schedule-add-form {
+  margin-bottom: 1.25rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.schedule-add-form h3 {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.schedule-add-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.75rem;
+}
+
+.schedule-add-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.schedule-add-grid input {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.875rem;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.schedule-add-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.85rem;
+}
+
+.schedule-add-result {
+  font-size: 0.85rem;
+}
+
+.schedule-add-result.success {
+  color: #34d399;
+}
+
+.schedule-add-result.error {
+  color: #f87171;
+}
+
 .tabs {
   display: flex;
   gap: 0.35rem;

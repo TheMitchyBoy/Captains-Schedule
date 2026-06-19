@@ -1,4 +1,4 @@
-"""Tests for manual schedule row updates."""
+"""Tests for manual schedule row create and update."""
 
 from datetime import date
 
@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
 from app.models import ScheduleEntry
-from app.schedule_update import update_schedule_entry
+from app.schedule_update import create_schedule_entry, update_schedule_entry
 
 
 def _make_session():
@@ -94,3 +94,65 @@ def test_update_requires_at_least_one_field():
     except ValueError as exc:
         assert "at least one field" in str(exc).lower()
     db.close()
+
+
+def test_create_schedule_entry():
+    db = _make_session()
+
+    entry = create_schedule_entry(
+        db,
+        schedule_date=date(2026, 5, 3),
+        ship="Carnival Spirit",
+        checkin_time="7am",
+        return_time="11:30am",
+        boat_codes="JR, LewE",
+        berth="2",
+    )
+
+    assert entry.ship == "Carnival Spirit"
+    assert entry.checkin_time == "07:00"
+    assert entry.return_time == "11:30"
+    assert entry.boat_codes == "JR, LewE"
+    assert entry.berth == "2"
+    assert entry.date_header == "Sunday 5/3"
+    assert entry.upload_batch_id.startswith("manual-")
+    db.close()
+
+
+def test_create_merges_boats_into_existing_slot():
+    db = _make_session()
+    _add_entry(db, boat_codes="BW")
+
+    entry = create_schedule_entry(
+        db,
+        schedule_date=date(2026, 5, 3),
+        ship="Carnival Spirit",
+        checkin_time="07:00",
+        return_time="11:30",
+        boat_codes="JR, LewE",
+    )
+
+    assert db.query(ScheduleEntry).count() == 1
+    assert "BW" in entry.boat_codes
+    assert "JR" in entry.boat_codes
+    db.close()
+
+
+def test_create_rejects_exact_duplicate():
+    db = _make_session()
+    _add_entry(db, boat_codes="JR, LewE")
+
+    try:
+        create_schedule_entry(
+            db,
+            schedule_date=date(2026, 5, 3),
+            ship="Carnival Spirit",
+            checkin_time="07:00",
+            return_time="11:30",
+            boat_codes="JR, LewE",
+        )
+        assert False, "expected ValueError"
+    except ValueError as exc:
+        assert "already exists" in str(exc).lower()
+    db.close()
+
