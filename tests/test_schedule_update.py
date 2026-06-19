@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
 from app.models import ScheduleEntry
-from app.schedule_update import create_schedule_entry, update_schedule_entry
+from app.schedule_update import bulk_create_schedule_entries, create_schedule_entry, update_schedule_entry
 
 
 def _make_session():
@@ -155,4 +155,52 @@ def test_create_rejects_exact_duplicate():
     except ValueError as exc:
         assert "already exists" in str(exc).lower()
     db.close()
+
+
+def test_bulk_create_schedule_entries():
+    db = _make_session()
+    text = """
+Sunday 5/3
+C. Spirit (Carnival Spirit) — JR, LewE — 7am-11:30am
+Eurodam — BW, BWA — 06:30–10:45
+"""
+    result = bulk_create_schedule_entries(db, text, 2026)
+
+    assert result.rows_parsed == 2
+    assert result.rows_created == 2
+    assert result.rows_merged == 0
+    assert result.rows_skipped == 0
+    assert not result.errors
+    assert db.query(ScheduleEntry).count() == 2
+    db.close()
+
+
+def test_bulk_create_merges_existing_slot():
+    db = _make_session()
+    _add_entry(db, boat_codes="BW")
+
+    text = "5/3 Carnival Spirit — JR, LewE — 07:00–11:30"
+    result = bulk_create_schedule_entries(db, text, 2026)
+
+    assert result.rows_parsed == 1
+    assert result.rows_merged == 1
+    assert db.query(ScheduleEntry).count() == 1
+    row = db.query(ScheduleEntry).one()
+    assert "BW" in row.boat_codes
+    assert "JR" in row.boat_codes
+    db.close()
+
+
+def test_bulk_create_skips_exact_duplicate():
+    db = _make_session()
+    _add_entry(db, boat_codes="JR, LewE")
+
+    text = "5/3 Carnival Spirit — JR, LewE — 07:00–11:30"
+    result = bulk_create_schedule_entries(db, text, 2026)
+
+    assert result.rows_parsed == 1
+    assert result.rows_skipped == 1
+    assert db.query(ScheduleEntry).count() == 1
+    db.close()
+
 

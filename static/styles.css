@@ -425,6 +425,55 @@ tr.schedule-row-editing td {
   color: #f87171;
 }
 
+.schedule-bulk-form {
+  margin-top: 1rem;
+}
+
+.schedule-bulk-help {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.schedule-bulk-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.75rem;
+}
+
+.schedule-bulk-label input[type="number"] {
+  width: 6rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.875rem;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.schedule-bulk-text {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  resize: vertical;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
 .tabs {
   display: flex;
   gap: 0.35rem;

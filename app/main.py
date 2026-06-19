@@ -40,6 +40,8 @@ from app.schemas import (
     ScheduleEntryOut,
     ScheduleEntryUpdate,
     ScheduleEntryCreate,
+    ScheduleBulkCreate,
+    ScheduleBulkResult,
     ShipCapacityOut,
     StatsOut,
     StorageStatusOut,
@@ -49,7 +51,7 @@ from app.schemas import (
 )
 from app.schedule_repair import repair_schedule_berth_mixups
 from app.schedule_dedup import deduplicate_schedule_entries
-from app.schedule_update import create_schedule_entry, update_schedule_entry
+from app.schedule_update import bulk_create_schedule_entries, create_schedule_entry, update_schedule_entry
 from app.ship_data import lookup_ship_online, seed_ship_capacities
 from app.xml_cleaner import clean_xml_content
 
@@ -441,6 +443,36 @@ def create_schedule(
     rebuild_patterns(db)
     clear_ai_prediction_cache()
     return entry
+
+
+@app.post("/api/schedules/bulk", response_model=ScheduleBulkResult)
+def create_schedules_bulk(
+    payload: ScheduleBulkCreate,
+    db: Session = Depends(get_db),
+):
+    """Parse and add multiple tour lines from dispatch-style pasted text."""
+    text = payload.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Paste one or more tour lines to import")
+
+    result = bulk_create_schedule_entries(db, text, payload.reference_year)
+    if result.rows_created == 0 and result.rows_merged == 0 and not result.rows_parsed:
+        raise HTTPException(
+            status_code=400,
+            detail=result.errors[0] if result.errors else "No tour lines could be imported",
+        )
+
+    if result.rows_created or result.rows_merged:
+        rebuild_patterns(db)
+        clear_ai_prediction_cache()
+
+    return ScheduleBulkResult(
+        rows_parsed=result.rows_parsed,
+        rows_created=result.rows_created,
+        rows_merged=result.rows_merged,
+        rows_skipped=result.rows_skipped,
+        errors=result.errors,
+    )
 
 
 @app.patch("/api/schedules/{entry_id}", response_model=ScheduleEntryOut)

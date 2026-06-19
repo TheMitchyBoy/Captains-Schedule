@@ -49,6 +49,23 @@ class ScheduleEntryCreate(BaseModel):
     date_header: str | None = None
 
 
+class ScheduleBulkCreate(BaseModel):
+    """Paste dispatch-style tour lines for POST /api/schedules/bulk."""
+
+    text: str
+    reference_year: int = Field(default=2026, ge=2000, le=2100)
+
+
+class ScheduleBulkResult(BaseModel):
+    """Summary returned after bulk tour import."""
+
+    rows_parsed: int
+    rows_created: int
+    rows_merged: int
+    rows_skipped: int
+    errors: list[str] = []
+
+
 class UploadResult(BaseModel):
     """Summary returned after a successful XML upload."""
 

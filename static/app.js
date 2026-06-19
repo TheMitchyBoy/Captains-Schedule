@@ -302,6 +302,69 @@ function setupAddTourForm() {
   form.addEventListener("submit", addTour);
 }
 
+async function bulkAddTours(event) {
+  event.preventDefault();
+  const resultEl = $("#bulkTourResult");
+  const submitBtn = $("#bulkTourBtn");
+  const text = $("#bulkTourText").value.trim();
+  const referenceYear = Number($("#bulkTourYear").value) || 2026;
+
+  if (!text) {
+    resultEl.classList.remove("hidden", "success");
+    resultEl.classList.add("error");
+    resultEl.textContent = "Paste one or more tour lines first";
+    return;
+  }
+
+  submitBtn.disabled = true;
+  resultEl.classList.remove("hidden", "success", "error");
+  resultEl.textContent = "Importing tours...";
+
+  try {
+    const res = await fetch(API + "/api/schedules/bulk", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, reference_year: referenceYear }),
+    });
+    if (!res.ok) throw new Error(await readErrorDetail(res));
+    const data = await res.json();
+
+    const parts = [];
+    if (data.rows_created) parts.push(`${data.rows_created} added`);
+    if (data.rows_merged) parts.push(`${data.rows_merged} merged`);
+    if (data.rows_skipped) parts.push(`${data.rows_skipped} skipped`);
+
+    resultEl.classList.add(data.errors?.length ? "error" : "success");
+    let message = parts.length ? parts.join(", ") : "No new tours imported";
+    if (data.errors?.length) {
+      message += ` · ${data.errors.length} issue(s): ${data.errors.slice(0, 2).join("; ")}`;
+      if (data.errors.length > 2) message += "…";
+    }
+    resultEl.textContent = message;
+
+    if (data.rows_created || data.rows_merged) {
+      await Promise.all([
+        loadSchedules(),
+        loadStats(),
+        loadPredictions(),
+        loadCaptainOverview(),
+        loadCalendar(),
+      ]);
+    }
+  } catch (e) {
+    resultEl.classList.add("error");
+    resultEl.textContent = "Bulk import failed: " + e.message;
+  } finally {
+    submitBtn.disabled = false;
+  }
+}
+
+function setupBulkTourForm() {
+  const form = $("#bulkTourForm");
+  if (!form) return;
+  form.addEventListener("submit", bulkAddTours);
+}
+
 function groupPredictionsByShip(rows) {
   const groups = new Map();
   for (const row of rows) {
@@ -838,6 +901,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupControls();
   setupScheduleEditing();
   setupAddTourForm();
+  setupBulkTourForm();
   refreshAll();
   // Focus raw input so users can paste immediately
   $("#rawXmlInput").focus();

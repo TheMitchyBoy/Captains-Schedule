@@ -273,6 +273,25 @@
               <span class="schedule-add-result hidden" id="addTourResult"></span>
             </div>
           </form>
+          <form class="schedule-add-form schedule-bulk-form" id="bulkTourForm">
+            <h3>Bulk Add Tours</h3>
+            <p class="schedule-bulk-help">Paste dispatch lines — one tour per line. Use a date header or inline date like <code>5/3</code>.</p>
+            <label class="schedule-bulk-label">
+              Reference year
+              <input type="number" id="bulkTourYear" value="2026" min="2000" max="2100" />
+            </label>
+            <label class="schedule-bulk-label">
+              Tour lines
+              <textarea id="bulkTourText" class="schedule-bulk-text" rows="8" placeholder="Sunday 5/3
+C. Spirit (Carnival Spirit) — JR, LewE — 7am-11:30am
+Eurodam — BW, BWA — 06:30–10:45
+6/4 Koningsdam — DrmC, 50/50 — 11:00–15:15"></textarea>
+            </label>
+            <div class="schedule-add-actions">
+              <button type="submit" class="btn" id="bulkTourBtn">Add All Tours</button>
+              <span class="schedule-add-result hidden" id="bulkTourResult"></span>
+            </div>
+          </form>
           <div class="table-wrap">
             <table>
               <thead>
