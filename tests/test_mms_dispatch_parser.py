@@ -58,6 +58,36 @@ def test_resolve_island_to_island_princess():
     assert resolve_dispatch_ship_name("Island") == "Island Princess"
 
 
+def test_resolve_c_spirit_parenthetical():
+    assert resolve_dispatch_ship_name("C. Spirit (Carnival Spirit)") == "Carnival Spirit"
+    assert resolve_dispatch_ship_name("C. Spirit") == "Carnival Spirit"
+
+
+def test_carnival_spirit_may_3_jr_lewe_7am():
+    text = """
+Sunday 5/3
+C. Spirit (Carnival Spirit) — JR, LewE — 7am-11:30am
+"""
+    rows, errors = parse_tour_lines_from_text(text, 2026)
+    assert not errors
+    assert len(rows) == 1
+    assert rows[0]["schedule_date"] == date(2026, 5, 3)
+    assert rows[0]["ship"] == "Carnival Spirit"
+    assert rows[0]["checkin_time"] == "07:00"
+    assert rows[0]["return_time"] == "11:30"
+    assert "JR" in rows[0]["boat_codes"]
+    assert "LewE" in rows[0]["boat_codes"]
+
+
+def test_carnival_spirit_at_7am_format():
+    text = "5/3 C. Spirit (Carnival Spirit) — JR, LewE at 7am-11:30am"
+    rows, errors = parse_tour_lines_from_text(text, 2026)
+    assert not errors
+    assert len(rows) == 1
+    assert rows[0]["ship"] == "Carnival Spirit"
+    assert rows[0]["checkin_time"] == "07:00"
+
+
 def test_clean_xml_preserves_mms_tour_rows():
     from app.xml_cleaner import clean_xml_content
 

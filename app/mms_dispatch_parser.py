@@ -4,6 +4,7 @@ MMS dispatch message parser for Ketchikan tour boat assignments.
 Dispatch exports often embed multiple tour rows inside a single MMS/message body:
 
     Eurodam — BS, BW, BWA — 06:30–10:45
+    C. Spirit (Carnival Spirit) — JR, LewE — 7am-11:30am
     Koningsdam — AriC, BF, BS, BW — 11:00–15:15
 
 Standard XML parsers that treat one message as one schedule entry miss most tours.
@@ -14,16 +15,14 @@ from __future__ import annotations
 
 import re
 import xml.etree.ElementTree as ET
-from datetime import date
+from datetime import date, datetime, timedelta
 
 from app.berth_utils import merge_dispatch_codes
 from app.ship_data import BUILTIN_SHIPS, _fuzzy_match_builtin, normalize_ship_name
 from app.xml_cleaner import normalize_time_24h
 from app.xml_parser import (
-    DATE_HEADER_PATTERN,
     FIELD_ALIASES,
     _extract_entry_fields,
-    _find_schedule_entries,
     _normalize_tag,
     infer_reference_year,
     parse_date_from_header,
@@ -32,16 +31,68 @@ from app.xml_parser import (
 DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 DASH = r"(?:\u2014|\u2013|—|–|-)"
+TIME_TOKEN = r"\d{1,2}(?::\d{2})?\s*(?:[ap]\.?m\.?)?|\d{3,4}"
+TIME_RANGE = rf"(?P<start>{TIME_TOKEN})\s*(?:{DASH}|to)\s*(?P<end>{TIME_TOKEN})"
+TIME_AT = rf"at\s+(?P<start>{TIME_TOKEN})(?:\s*(?:{DASH}|to)\s*(?P<end>{TIME_TOKEN}))?"
 
-# Tour dispatch line: [date] Ship — boats — HH:MM–HH:MM
-TOUR_LINE_PATTERN = re.compile(
-    rf"^\s*"
-    rf"(?:(?P<month>\d{{1,2}})/(?P<day>\d{{1,2}})\s+)?"
-    rf"(?P<ship>[A-Za-z][A-Za-z0-9'.\s&]+?)\s*{DASH}\s*"
-    rf"(?P<boats>.+?)\s*{DASH}\s*"
-    rf"(?P<start>\d{{1,2}}:\d{{2}})\s*{DASH}\s*(?P<end>\d{{1,2}}:\d{{2}})\s*$",
-    re.MULTILINE,
-)
+# Common abbreviated ship names in Ketchikan MMS dispatch messages.
+DISPATCH_SHIP_ALIASES: dict[str, str] = {
+    "c spirit": "Carnival Spirit",
+    "c miracle": "Carnival Miracle",
+    "c luminosa": "Carnival Luminosa",
+    "c legend": "Carnival Legend",
+    "c freedom": "Carnival Freedom",
+    "c sensation": "Carnival Sensation",
+    "c valor": "Carnival Valor",
+    "c dream": "Carnival Dream",
+    "c breeze": "Carnival Breeze",
+    "c magic": "Carnival Magic",
+    "c elation": "Carnival Elation",
+    "c paradise": "Carnival Paradise",
+    "c conquest": "Carnival Conquest",
+    "c glory": "Carnival Glory",
+    "c liberty": "Carnival Liberty",
+    "c pride": "Carnival Pride",
+    "c sunshine": "Carnival Sunshine",
+    "c horizon": "Carnival Horizon",
+    "c vista": "Carnival Vista",
+    "c panorama": "Carnival Panorama",
+    "c celebration": "Carnival Celebration",
+    "c jubilee": "Carnival Jubilee",
+    "c mardi gras": "Carnival Mardi Gras",
+    "c splendor": "Carnival Splendor",
+    "c radiance": "Carnival Radiance",
+    "c spirit ii": "Carnival Spirit",
+}
+
+TOUR_LINE_PATTERNS: list[re.Pattern[str]] = [
+    # [date] Ship — boats — 7am-11:30am / 06:30–10:45
+    re.compile(
+        rf"^\s*"
+        rf"(?:(?P<month>\d{{1,2}})/(?P<day>\d{{1,2}})\s+)?"
+        rf"(?P<ship>.+?)\s*{DASH}\s*"
+        rf"(?P<boats>.+?)\s*{DASH}\s*"
+        rf"{TIME_RANGE}\s*$",
+        re.IGNORECASE,
+    ),
+    # Ship — boats at 7am-11:30am
+    re.compile(
+        rf"^\s*"
+        rf"(?:(?P<month>\d{{1,2}})/(?P<day>\d{{1,2}})\s+)?"
+        rf"(?P<ship>.+?)\s*{DASH}\s*"
+        rf"(?P<boats>.+?)\s+{TIME_AT}\s*$",
+        re.IGNORECASE,
+    ),
+    # [date] Ship boats 7am-11:30am (no em-dash separators)
+    re.compile(
+        rf"^\s*"
+        rf"(?:(?P<month>\d{{1,2}})/(?P<day>\d{{1,2}})\s+)?"
+        rf"(?P<ship>[A-Za-z][A-Za-z0-9.\s&()]+?)\s+"
+        rf"(?P<boats>(?:[A-Za-z][A-Za-z0-9]*(?:\s*,\s*[A-Za-z][A-Za-z0-9]*)+|50/50))\s+"
+        rf"{TIME_RANGE}\s*$",
+        re.IGNORECASE,
+    ),
+]
 
 INLINE_DATE_PATTERN = re.compile(
     r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)?\s*"
@@ -49,14 +100,6 @@ INLINE_DATE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-MESSAGE_CONTAINER_TAGS = {
-    "messages",
-    "mms_messages",
-    "mms",
-    "dispatch_messages",
-    "dispatch_list",
-    "data",
-}
 MESSAGE_TAGS = {"message", "msg", "sms", "mms", "dispatch_message"}
 BODY_FIELD_TAGS = {"body", "text", "content", "message_text", "payload", "data", "raw_text"}
 DATE_FIELD_TAGS = {"date", "sent_date", "schedule_date", "dispatch_date", "message_date"}
@@ -72,12 +115,40 @@ def looks_like_mms_dispatch(content: bytes | str) -> bool:
     lower = text.lower()
     if "<message" in lower or "<mms" in lower or "mms dispatch" in lower:
         return True
-    return len(TOUR_LINE_PATTERN.findall(text)) >= 2
+    return _count_tour_like_lines(text) >= 2
+
+
+def _count_tour_like_lines(text: str) -> int:
+    count = 0
+    for line in text.splitlines():
+        if _match_tour_line(line.strip()):
+            count += 1
+    return count
+
+
+def _alias_key(name: str) -> str:
+    return re.sub(r"[.\"']", "", normalize_ship_name(name))
+
+
+def _clean_ship_text(raw: str) -> str:
+    text = raw.strip()
+    paren = re.match(r"^(?P<short>.+?)\s*\((?P<full>[^)]+)\)\s*$", text)
+    if paren:
+        return paren.group("full").strip()
+    return text
 
 
 def resolve_dispatch_ship_name(name: str) -> str:
     """Expand abbreviated dispatch ship names when uniquely identifiable."""
-    text = name.strip()
+    text = _clean_ship_text(name.strip())
+    alias = _alias_key(text)
+    if alias in DISPATCH_SHIP_ALIASES:
+        return DISPATCH_SHIP_ALIASES[alias]
+
+    for key, full_name in DISPATCH_SHIP_ALIASES.items():
+        if alias == key or alias.startswith(key + " "):
+            return full_name
+
     normalized = normalize_ship_name(text)
     if normalized in BUILTIN_SHIPS:
         return _title_ship(normalized)
@@ -118,12 +189,84 @@ def _build_date_header(schedule_date: date) -> str:
     return f"{DAY_NAMES[schedule_date.weekday()]} {schedule_date.month}/{schedule_date.day}"
 
 
-def _normalize_tour_times(start: str, end: str) -> tuple[str | None, str | None, str | None]:
-    checkin, err1 = normalize_time_24h(start.strip())
-    ret, err2 = normalize_time_24h(end.strip())
-    if not checkin or not ret:
-        return None, None, err1 or err2
-    return checkin, ret, None
+def _normalize_single_time(value: str) -> str | None:
+    normalized, _ = normalize_time_24h(value.strip())
+    return normalized
+
+
+def _normalize_tour_times(start: str, end: str | None) -> tuple[str | None, str | None, str | None]:
+    checkin = _normalize_single_time(start)
+    if not checkin:
+        return None, None, f"Unrecognized start time: '{start}'"
+
+    if end:
+        return_time = _normalize_single_time(end)
+        if not return_time:
+            return None, None, f"Unrecognized end time: '{end}'"
+        return checkin, return_time, None
+
+    # Single check-in time only — assume a 4-hour tour window when end is omitted.
+    hour, minute = map(int, checkin.split(":"))
+    end_dt = datetime(2000, 1, 1, hour, minute) + timedelta(hours=4)
+    return checkin, end_dt.strftime("%H:%M"), None
+
+
+def _match_tour_line(line: str) -> re.Match[str] | None:
+    for pattern in TOUR_LINE_PATTERNS:
+        match = pattern.match(line)
+        if match:
+            return match
+    return None
+
+
+def _looks_like_date_header(line: str) -> bool:
+    if _match_tour_line(line):
+        return False
+    if parse_date_from_header(line, 2026)[0]:
+        return True
+    if _parse_inline_date(line, 2026) and line.count("—") + line.count("–") + line.count("-") < 2:
+        return True
+    return False
+
+
+def _row_from_tour_match(
+    match: re.Match[str],
+    *,
+    current_date: date | None,
+    reference_year: int,
+) -> tuple[dict | None, str | None]:
+    month = match.groupdict().get("month")
+    day = match.groupdict().get("day")
+    schedule_date = current_date
+    if month and day:
+        try:
+            schedule_date = date(reference_year, int(month), int(day))
+        except ValueError:
+            return None, f"invalid date {month}/{day}"
+    elif schedule_date is None:
+        return None, "tour line missing date"
+
+    start = match.group("start")
+    end = match.groupdict().get("end")
+    checkin, return_time, time_err = _normalize_tour_times(start, end)
+    if time_err or not checkin or not return_time:
+        return None, time_err or "invalid times"
+
+    ship = resolve_dispatch_ship_name(match.group("ship"))
+    boats_raw = match.group("boats").strip().strip(",")
+
+    return (
+        {
+            "date_header": _build_date_header(schedule_date),
+            "schedule_date": schedule_date,
+            "ship": ship,
+            "checkin_time": checkin,
+            "return_time": return_time,
+            "boat_codes": boats_raw,
+            "ship_count": None,
+        },
+        None,
+    )
 
 
 def parse_tour_lines_from_text(
@@ -142,56 +285,28 @@ def parse_tour_lines_from_text(
         if not line or line.startswith("<!--"):
             continue
 
-        header_date, _ = parse_date_from_header(line, reference_year)
-        if header_date and not TOUR_LINE_PATTERN.search(line):
-            current_date = header_date
-            continue
-
-        inline_only = _parse_inline_date(line, reference_year)
-        if inline_only and line.count("—") + line.count("–") + line.count("-") < 2:
-            if not TOUR_LINE_PATTERN.search(line):
-                current_date = inline_only
+        if _looks_like_date_header(line):
+            header_date, _ = parse_date_from_header(line, reference_year)
+            if header_date:
+                current_date = header_date
+                continue
+            inline = _parse_inline_date(line, reference_year)
+            if inline:
+                current_date = inline
                 continue
 
-        match = TOUR_LINE_PATTERN.match(line)
+        match = _match_tour_line(line)
         if not match:
-            if re.search(r"\d{1,2}:\d{2}", line) and any(ch in line for ch in ("—", "–", "-")):
-                errors.append(f"Line {line_no}: could not parse tour dispatch line: {line[:80]}")
+            if re.search(TIME_TOKEN, line, re.I) and any(ch in line for ch in ("—", "–", "-", " at ")):
+                errors.append(f"Line {line_no}: could not parse tour dispatch line: {line[:100]}")
             continue
 
-        month = match.group("month")
-        day = match.group("day")
-        schedule_date = current_date
-        if month and day:
-            try:
-                schedule_date = date(reference_year, int(month), int(day))
-            except ValueError:
-                errors.append(f"Line {line_no}: invalid date {month}/{day}")
-                continue
-        elif schedule_date is None:
-            errors.append(f"Line {line_no}: tour line missing date: {line[:80]}")
+        row, err = _row_from_tour_match(match, current_date=current_date, reference_year=reference_year)
+        if err:
+            errors.append(f"Line {line_no}: {err}")
             continue
-
-        ship = resolve_dispatch_ship_name(match.group("ship"))
-        boats_raw = match.group("boats").strip()
-        checkin, return_time, time_err = _normalize_tour_times(
-            match.group("start"), match.group("end")
-        )
-        if time_err or not checkin or not return_time:
-            errors.append(f"Line {line_no}: {time_err or 'invalid times'}")
-            continue
-
-        rows.append(
-            {
-                "date_header": _build_date_header(schedule_date),
-                "schedule_date": schedule_date,
-                "ship": ship,
-                "checkin_time": checkin,
-                "return_time": return_time,
-                "boat_codes": boats_raw,
-                "ship_count": None,
-            }
-        )
+        if row:
+            rows.append(row)
 
     return rows, errors
 
@@ -244,7 +359,6 @@ def _collect_message_blocks(root: ET.Element) -> list[tuple[str | None, str]]:
     if blocks:
         return blocks
 
-    # Flat XML: treat each body/text element as its own block.
     for elem in root.iter():
         tag = _normalize_tag(elem.tag)
         if tag in BODY_FIELD_TAGS:
@@ -268,21 +382,18 @@ def _extract_structured_tour_elements(root: ET.Element, reference_year: int) -> 
         checkin = fields.get("checkin_time", "").strip()
         ret = fields.get("return_time", "").strip()
         boats = fields.get("boat_codes", "").strip()
-        if not ship or not checkin or not ret or not boats:
+        if not ship or not checkin or not boats:
             continue
 
         date_header = fields.get("date_header", "")
         schedule_date, ship_count = parse_date_from_header(date_header, reference_year)
         if schedule_date is None:
-            parent_date = None
-            for ancestor in [elem]:
-                pass
             schedule_date = _parse_inline_date(date_header, reference_year)
         if schedule_date is None:
             continue
 
-        checkin_norm, ret_norm, _ = _normalize_tour_times(checkin, ret)
-        if not checkin_norm or not ret_norm:
+        checkin_norm, return_norm, _ = _normalize_tour_times(checkin, ret or None)
+        if not checkin_norm or not return_norm:
             continue
 
         rows.append(
@@ -291,7 +402,7 @@ def _extract_structured_tour_elements(root: ET.Element, reference_year: int) -> 
                 "schedule_date": schedule_date,
                 "ship": resolve_dispatch_ship_name(ship),
                 "checkin_time": checkin_norm,
-                "return_time": ret_norm,
+                "return_time": return_norm,
                 "boat_codes": boats,
                 "ship_count": ship_count,
             }
@@ -334,11 +445,9 @@ def extract_mms_dispatch_rows(content: bytes | str) -> tuple[list[dict], list[st
     except ET.ParseError:
         pass
 
-    # Always scan full text — catches plain-text exports and CDATA bodies.
     text_rows, text_errors = parse_tour_lines_from_text(text, reference_year)
     errors.extend(text_errors)
 
-    # Merge text scan rows without duplicating message-block parses.
     seen_keys = {
         (r["schedule_date"], r["ship"].lower(), r["checkin_time"], r["return_time"], r["boat_codes"])
         for r in all_rows
