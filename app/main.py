@@ -46,6 +46,7 @@ from app.schemas import (
     RepairRecordOut,
 )
 from app.schedule_repair import repair_schedule_berth_mixups
+from app.schedule_dedup import deduplicate_schedule_entries
 from app.ship_data import lookup_ship_online, seed_ship_capacities
 from app.xml_cleaner import clean_xml_content
 
@@ -116,11 +117,20 @@ def _finalize_upload(
     rebuild_patterns(db)
     clear_ai_prediction_cache()
 
+    deduped = deduplicate_schedule_entries(db)
+    if deduped["rows_deleted"]:
+        rebuild_patterns(db)
+        clear_ai_prediction_cache()
+
     notes_parts: list[str] = []
     if replaced:
         notes_parts.append(f"Replaced {replaced} existing schedule rows")
     if repaired:
         notes_parts.append(f"Repaired {repaired} berth/boat field mixups")
+    if deduped["rows_deleted"]:
+        notes_parts.append(
+            f"Removed {deduped['rows_deleted']} duplicate rows ({deduped['rows_remaining']} remaining)"
+        )
     if errors:
         notes_parts.extend(errors[:5])
 
@@ -177,6 +187,13 @@ def on_startup():
             repaired = repair_schedule_berth_mixups(db)
             if repaired:
                 print(f"Repaired {repaired} schedule rows with berth/boat field mixups")
+                rebuild_patterns(db)
+            deduped = deduplicate_schedule_entries(db)
+            if deduped["rows_deleted"]:
+                print(
+                    f"Removed {deduped['rows_deleted']} duplicate schedule rows "
+                    f"({deduped['rows_remaining']} remaining)"
+                )
                 rebuild_patterns(db)
         if entry_count and pattern_count == 0:
             rebuilt = rebuild_patterns(db)
@@ -468,6 +485,17 @@ def patterns_rebuild(db: Session = Depends(get_db)):
     """Manually trigger a full rebuild of learned captain patterns."""
     count = rebuild_patterns(db)
     return {"patterns_rebuilt": count}
+
+
+@app.post("/api/schedules/deduplicate")
+def deduplicate_schedules(db: Session = Depends(get_db)):
+    """Merge and delete duplicate schedule rows (same ship/date/times)."""
+    repair_schedule_berth_mixups(db)
+    result = deduplicate_schedule_entries(db)
+    if result["rows_deleted"]:
+        rebuild_patterns(db)
+        clear_ai_prediction_cache()
+    return result
 
 
 @app.get("/api/storage", response_model=StorageStatusOut)

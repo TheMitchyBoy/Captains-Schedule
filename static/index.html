@@ -124,7 +124,8 @@
         <div class="direct-upload-row">
           <input type="file" id="directUploadInput" accept=".xml,text/xml,application/xml" multiple hidden />
           <button type="button" class="btn" id="directUploadBtn">Upload XML File(s) to Database</button>
-          <span class="direct-upload-hint">Adds new rows · skips duplicates · no need to re-upload on future visits</span>
+          <button type="button" class="btn secondary" id="dedupeSchedulesBtn">Remove Duplicates</button>
+          <span class="direct-upload-hint">Merges repeated uploads · same ship/date/times become one row</span>
         </div>
         <div id="directUploadResult" class="upload-result hidden"></div>
       </section>

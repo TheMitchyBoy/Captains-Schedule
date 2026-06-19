@@ -567,8 +567,34 @@ async function pasteFromClipboard() {
   }
 }
 
+/** Merge duplicate schedule rows (same ship/date/times from repeated uploads). */
+async function dedupeSchedules() {
+  const resultEl = $("#directUploadResult");
+  resultEl.classList.remove("hidden", "success", "error");
+  resultEl.textContent = "Removing duplicate rows...";
+  $("#dedupeSchedulesBtn").disabled = true;
+  try {
+    const res = await fetch(API + "/api/schedules/deduplicate", { method: "POST" });
+    if (!res.ok) throw new Error(await readErrorDetail(res));
+    const data = await res.json();
+    resultEl.classList.add("success");
+    if (data.rows_deleted) {
+      resultEl.textContent = `Removed ${data.rows_deleted} duplicate rows — ${data.rows_remaining} schedule entries remaining`;
+    } else {
+      resultEl.textContent = "No duplicates found";
+    }
+    await Promise.all([loadStats(), loadStorageStatus(), loadSchedules(), loadPredictions(), loadCaptainOverview()]);
+  } catch (e) {
+    resultEl.classList.add("error");
+    resultEl.textContent = "Dedupe failed: " + e.message;
+  } finally {
+    $("#dedupeSchedulesBtn").disabled = false;
+  }
+}
+
 function setupDirectUpload() {
   $("#directUploadBtn").addEventListener("click", () => $("#directUploadInput").click());
+  $("#dedupeSchedulesBtn").addEventListener("click", dedupeSchedules);
   $("#directUploadInput").addEventListener("change", () => {
     directUploadFiles($("#directUploadInput").files);
   });
