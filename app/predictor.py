@@ -8,8 +8,9 @@ Core approach:
   1. After each XML upload, aggregate historical shifts by (captain, weekday, ship, times)
   2. Compute confidence = how often this assignment occurs vs. all shifts for that captain on that weekday
   3. For each future date, apply matching weekday patterns and attach busy-day scores
-  4. Enforce scheduling constraints: one boat per ship at a time, no captain overlap,
-     alphabetical boat dispatch order, and 3-hour minimum turnaround between tours
+  4. Enforce scheduling constraints: multiple boats may serve the same ship,
+     no boat overlap, alphabetical boat dispatch order, and 3-hour minimum
+     turnaround between tours for the same boat
   5. Optionally use OpenAI to forecast ships in port and suggest captain assignments
 """
 
@@ -34,6 +35,59 @@ from app.schemas import CaptainPrediction, CaptainSummary
 from app.ship_data import estimate_daily_passengers, get_ship_capacity, normalize_ship_name
 
 from app.berth_utils import split_dispatch_codes
+
+DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+
+def learn_expected_boat_counts(db: Session) -> dict[tuple[str, int, str, str], int]:
+    """
+    Learn how many tour boats each cruise ship typically needs per time slot.
+
+    Uses the maximum observed boat count per (ship, weekday, checkin, return).
+    Larger ships that need more boats will have higher counts.
+    """
+    per_slot: dict[tuple[str, int, str, str], list[int]] = defaultdict(list)
+    for entry in db.query(ScheduleEntry).all():
+        codes = split_dispatch_codes(entry.boat_codes)
+        if not codes:
+            continue
+        key = (
+            entry.ship,
+            entry.schedule_date.weekday(),
+            entry.checkin_time,
+            entry.return_time,
+        )
+        per_slot[key].append(len(codes))
+
+    return {key: max(counts) for key, counts in per_slot.items()}
+
+
+def _expected_boats_for_ship_on_day(
+    slot_boat_counts: dict[tuple[str, int, str, str], int],
+    ship: str,
+    dow: int,
+) -> int:
+    """Return the typical boat count for a ship on a weekday (max across its slots)."""
+    counts = [
+        count
+        for (slot_ship, slot_dow, _checkin, _return_time), count in slot_boat_counts.items()
+        if slot_ship == ship and slot_dow == dow
+    ]
+    return max(counts) if counts else 1
+
+
+def _boats_assigned_to_ship(
+    candidates: list[ShiftCandidate],
+    target_date: date,
+    ship: str,
+) -> int:
+    """Count predicted boats already assigned to a ship on a given date."""
+    return sum(
+        1
+        for candidate in candidates
+        if candidate.schedule_date == target_date
+        and _ship_matches_expected(ship, candidate.ship)
+    )
 
 
 def rebuild_patterns(db: Session) -> int:
@@ -154,7 +208,7 @@ def predict_captain_schedule(
 
     Raw pattern matches are filtered through scheduling constraints so that:
       - Each boat serves only one cruise ship at a time
-      - Captains are never scheduled for overlapping tours
+      - Multiple boats may serve the same cruise ship when history shows it needs them
       - Boats are assigned in alphabetical order when multiple are eligible
       - At least 3 hours separate consecutive tours for the same boat
 
@@ -188,6 +242,7 @@ def predict_captain_schedule(
                 ai_meta["message"] = f"AI forecast ships for {len(ai_forecasts)} dates"
 
     all_boat_codes = sorted({p.boat_code for p in patterns})
+    slot_boat_counts = learn_expected_boat_counts(db)
     candidates: list[ShiftCandidate] = []
 
     for offset in range(days_ahead + 1):
@@ -223,11 +278,21 @@ def predict_captain_schedule(
                 )
             )
 
-        # AI captain suggestions for ships in port that patterns did not cover.
+        # AI captain suggestions for ships that still need more boats.
         if ai_enabled and ships:
-            covered_ships = {c.ship for c in candidates if c.schedule_date == target}
-            uncovered = [s for s in ships if not any(_ship_matches_expected(s, c) for c in covered_ships)]
-            if uncovered:
+            undercovered: list[dict[str, str | int]] = []
+            for ship in ships:
+                expected = _expected_boats_for_ship_on_day(slot_boat_counts, ship, dow)
+                assigned = _boats_assigned_to_ship(candidates, target, ship)
+                if assigned < expected:
+                    undercovered.append(
+                        {
+                            "ship": ship,
+                            "boats_needed": expected - assigned,
+                            "boats_expected": expected,
+                        }
+                    )
+            if undercovered:
                 ships_with_times = ai_forecasts.get(target) or [
                     {"ship": s, "checkin_time": "7:00 AM", "return_time": "3:00 PM"} for s in ships
                 ]
@@ -235,17 +300,17 @@ def predict_captain_schedule(
                     db,
                     target,
                     ships_with_times,
-                    uncovered,
+                    undercovered,
                     all_boat_codes if not boat_code else [boat_code],
                 )
                 if ai_candidates:
                     ai_meta["ai_assisted"] = True
                     ai_meta["ai_captain_suggestions"] += len(ai_candidates)
                     if not ai_meta["message"]:
-                        ai_meta["message"] = "AI suggested captain assignments for uncovered ships"
+                        ai_meta["message"] = "AI suggested captain assignments for under-covered ships"
                     candidates.extend(ai_candidates)
 
-    scheduled = apply_scheduling_constraints(candidates)
+    scheduled = apply_scheduling_constraints(candidates, slot_boat_counts=slot_boat_counts)
 
     predictions = [
         CaptainPrediction(

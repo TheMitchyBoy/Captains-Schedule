@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.models import ScheduleEntry, UploadLog
 from app.ship_data import get_ship_capacity
+from app.berth_utils import merge_dispatch_codes
 
 
 def persist_schedule_rows(
@@ -59,8 +60,8 @@ def persist_schedule_rows(
         if existing:
             existing.date_header = row["date_header"]
             existing.ship_count = row["ship_count"]
-            existing.berth = row.get("berth")
-            existing.boat_codes = row["boat_codes"][:255]
+            existing.berth = row.get("berth") or existing.berth
+            existing.boat_codes = merge_dispatch_codes(existing.boat_codes, row["boat_codes"])[:255]
             existing.upload_batch_id = batch_id
             skipped += 1
             continue

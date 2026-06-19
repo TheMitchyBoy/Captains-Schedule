@@ -3,7 +3,7 @@ Scheduling constraints for captain/boat predictions.
 
 Rules enforced when building daily forecasts:
   - A boat serves at most one cruise ship at a time (no overlapping assignments)
-  - A captain/boat cannot be out twice simultaneously
+  - Multiple tour boats may serve the same cruise ship at the same time
   - Boats are considered in alphabetical order when assigning tours
   - Minimum 3-hour turnaround between the end of one tour and the start of the next
 """
@@ -16,6 +16,9 @@ from dataclasses import dataclass
 from datetime import date
 
 MIN_TURNAROUND_MINUTES = 180  # 3 hours between tours for the same boat
+
+# (ship, weekday, checkin_time, return_time) -> expected tour boat count
+SlotBoatCounts = dict[tuple[str, int, str, str], int]
 
 
 @dataclass
@@ -86,10 +89,8 @@ def _respects_turnaround(
     for existing_start, existing_end in existing:
         if _intervals_overlap(existing_start, existing_end, start, end):
             return False
-        # New tour starts too soon after a previous one ends.
         if start >= existing_end and start < existing_end + min_gap:
             return False
-        # New tour ends too close before a later one starts.
         if end <= existing_start and end > existing_start - min_gap:
             return False
     return True
@@ -104,24 +105,17 @@ def _can_assign_boat(
     return _respects_turnaround(boat_timeline, start, end)
 
 
-def _can_assign_ship(
-    ship_timeline: list[tuple[int, int]],
-    start: int,
-    end: int,
-) -> bool:
-    """A cruise ship is served by at most one boat at a time."""
-    for existing_start, existing_end in ship_timeline:
-        if _intervals_overlap(existing_start, existing_end, start, end):
-            return False
-    return True
-
-
-def _schedule_day(candidates: list[ShiftCandidate]) -> list[ShiftCandidate]:
+def _schedule_day(
+    candidates: list[ShiftCandidate],
+    slot_boat_counts: SlotBoatCounts | None = None,
+    day_of_week: int | None = None,
+) -> list[ShiftCandidate]:
     """
     Build a feasible daily schedule from pattern candidates.
 
-    Groups by ship/time slot, then assigns boats in alphabetical order subject
-    to overlap and turnaround constraints.
+    Groups by ship/time slot, then assigns boats in alphabetical order.
+    Larger ships may receive multiple boats concurrently when history shows
+    they typically need more than one tour boat.
     """
     if not candidates:
         return []
@@ -131,7 +125,6 @@ def _schedule_day(candidates: list[ShiftCandidate]) -> list[ShiftCandidate]:
         key = (candidate.ship, candidate.checkin_time, candidate.return_time)
         slots[key].append(candidate)
 
-    # Process ship tours chronologically.
     sorted_slots = sorted(
         slots.items(),
         key=lambda item: (
@@ -142,7 +135,6 @@ def _schedule_day(candidates: list[ShiftCandidate]) -> list[ShiftCandidate]:
 
     scheduled: list[ShiftCandidate] = []
     boat_timelines: dict[str, list[tuple[int, int]]] = defaultdict(list)
-    ship_timelines: dict[str, list[tuple[int, int]]] = defaultdict(list)
 
     for (ship, checkin, return_time), slot_candidates in sorted_slots:
         start = _time_to_minutes(checkin)
@@ -152,31 +144,40 @@ def _schedule_day(candidates: list[ShiftCandidate]) -> list[ShiftCandidate]:
         if end <= start:
             end += 24 * 60
 
-        # Boats considered in alphabetical order; higher confidence wins ties.
+        expected_boats = 1
+        if slot_boat_counts is not None and day_of_week is not None:
+            expected_boats = max(
+                1,
+                slot_boat_counts.get((ship, day_of_week, checkin, return_time), 1),
+            )
+
         slot_candidates.sort(key=lambda c: (c.boat_code.lower(), -c.confidence))
 
+        assigned = 0
         for candidate in slot_candidates:
+            if assigned >= expected_boats:
+                break
             if not _can_assign_boat(boat_timelines[candidate.boat_code], start, end):
-                continue
-            if not _can_assign_ship(ship_timelines[ship], start, end):
                 continue
 
             boat_timelines[candidate.boat_code].append((start, end))
-            ship_timelines[ship].append((start, end))
             scheduled.append(candidate)
-            break
+            assigned += 1
 
     scheduled.sort(
         key=lambda c: (
             _time_to_minutes(c.checkin_time) or 9999,
-            c.boat_code.lower(),
             c.ship.lower(),
+            c.boat_code.lower(),
         )
     )
     return scheduled
 
 
-def apply_scheduling_constraints(candidates: list[ShiftCandidate]) -> list[ShiftCandidate]:
+def apply_scheduling_constraints(
+    candidates: list[ShiftCandidate],
+    slot_boat_counts: SlotBoatCounts | None = None,
+) -> list[ShiftCandidate]:
     """Apply daily scheduling rules across all candidate predictions."""
     by_day: dict[date, list[ShiftCandidate]] = defaultdict(list)
     for candidate in candidates:
@@ -184,5 +185,11 @@ def apply_scheduling_constraints(candidates: list[ShiftCandidate]) -> list[Shift
 
     result: list[ShiftCandidate] = []
     for day in sorted(by_day):
-        result.extend(_schedule_day(by_day[day]))
+        result.extend(
+            _schedule_day(
+                by_day[day],
+                slot_boat_counts=slot_boat_counts,
+                day_of_week=day.weekday(),
+            )
+        )
     return result

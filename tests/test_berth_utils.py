@@ -54,3 +54,14 @@ def test_repair_keeps_tour_boat_in_boat_codes():
     boat, berth = repair_boat_berth_value("DrmC", "2")
     assert boat == "DrmC"
     assert berth == "2"
+
+
+def test_split_dispatch_codes_supports_slashes():
+    assert split_dispatch_codes("DrmC / BW, BWA") == ["DrmC", "BW", "BWA"]
+
+
+def test_merge_dispatch_codes_deduplicates():
+    from app.berth_utils import merge_dispatch_codes
+
+    merged = merge_dispatch_codes("BW, BWA", "BWA / DrmC")
+    assert merged == "BW, BWA, DrmC"

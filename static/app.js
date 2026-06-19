@@ -127,7 +127,24 @@ function queryParams() {
   return q;
 }
 
-function sourceLabel(source) {
+function formatBoatCodes(value) {
+  if (!value) return "—";
+  const codes = value.split(/[,;/]+|\s+and\s+/i).map((c) => c.trim()).filter(Boolean);
+  if (!codes.length) return "—";
+  return codes.map((c) => `<code>${c}</code>`).join(" ");
+}
+
+function groupPredictionsByShip(rows) {
+  const groups = new Map();
+  for (const row of rows) {
+    const key = `${row.schedule_date}|${row.ship}|${row.checkin_time}|${row.return_time}`;
+    if (!groups.has(key)) {
+      groups.set(key, { ...row, boats: [] });
+    }
+    groups.get(key).boats.push(row);
+  }
+  return [...groups.values()];
+}
   if (source === "ai") return '<span class="source-badge ai">AI</span>';
   return '<span class="source-badge pattern">Pattern</span>';
 }
@@ -176,21 +193,30 @@ async function loadPredictions() {
       tbody.innerHTML = '<tr><td colspan="9" class="empty">No predictions yet — upload XML above to save schedule data to the database</td></tr>';
       return;
     }
-    tbody.innerHTML = data.slice(0, 200).map((p) => `
+    const grouped = groupPredictionsByShip(data);
+    tbody.innerHTML = grouped.slice(0, 200).map((group) => {
+      const boats = group.boats
+        .sort((a, b) => a.boat_code.localeCompare(b.boat_code))
+        .map((p) => `<code>${p.boat_code}</code>`)
+        .join(" ");
+      const top = group.boats.reduce((best, p) => (p.confidence > best.confidence ? p : best), group.boats[0]);
+      const hasAi = group.boats.some((p) => p.source === "ai");
+      return `
       <tr>
-        <td>${formatDate(p.schedule_date)}</td>
-        <td>${p.day_of_week}</td>
-        <td><code>${p.boat_code}</code></td>
-        <td>${p.ship}</td>
-        <td>${p.checkin_time}</td>
-        <td>${p.return_time}</td>
-        <td>${confidenceBar(p.confidence)}</td>
-        <td>${sourceLabel(p.source)}</td>
-        <td><span class="busy-badge ${busyClass(p.busy_score)}">${busyLabel(p.busy_score)}</span></td>
+        <td>${formatDate(group.schedule_date)}</td>
+        <td>${group.day_of_week}</td>
+        <td>${boats}</td>
+        <td>${group.ship}</td>
+        <td>${group.checkin_time}</td>
+        <td>${group.return_time}</td>
+        <td>${confidenceBar(top.confidence)}</td>
+        <td>${hasAi ? sourceLabel("ai") : sourceLabel("pattern")}</td>
+        <td><span class="busy-badge ${busyClass(top.busy_score)}">${busyLabel(top.busy_score)}</span></td>
       </tr>
-    `).join("");
-    if (data.length > 200) {
-      tbody.innerHTML += `<tr><td colspan="9" class="empty">Showing first 200 of ${data.length} predictions</td></tr>`;
+    `;
+    }).join("");
+    if (grouped.length > 200) {
+      tbody.innerHTML += `<tr><td colspan="9" class="empty">Showing first 200 of ${grouped.length} ship assignments</td></tr>`;
     }
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="9" class="empty">Error loading predictions</td></tr>`;
@@ -287,7 +313,7 @@ async function loadSchedules() {
         <td>${s.checkin_time}</td>
         <td>${s.return_time}</td>
         <td>${s.berth ? `<code>${s.berth}</code>` : "—"}</td>
-        <td>${s.boat_codes ? `<code>${s.boat_codes}</code>` : "—"}</td>
+        <td>${formatBoatCodes(s.boat_codes)}</td>
       </tr>
     `).join("");
   } catch (e) {

@@ -197,43 +197,48 @@ def ai_suggest_captain_shifts(
     db: Session,
     target_date: date,
     ships_in_port: list[dict[str, str]],
-    uncovered_ships: list[str],
+    undercovered_ships: list[dict[str, str | int]],
     boat_codes: list[str],
 ) -> list[ShiftCandidate]:
     """
-    Ask AI to suggest captain assignments for ships not covered by pattern matching.
+    Ask AI to suggest captain assignments for ships that still need more boats.
 
+    undercovered_ships items include ship name and boats_needed count.
     Suggestions are returned as ShiftCandidates with source='ai' and moderate confidence.
     """
-    if not uncovered_ships or not boat_codes or not get_settings().openai.is_configured:
+    if not undercovered_ships or not boat_codes or not get_settings().openai.is_configured:
         return []
 
-    cache_key = f"{target_date.isoformat()}:{','.join(sorted(uncovered_ships))}"
+    ship_names = [str(item.get("ship", "")).strip() for item in undercovered_ships if item.get("ship")]
+    cache_key = f"{target_date.isoformat()}:{','.join(sorted(ship_names))}"
     if cache_key in _captain_suggestion_cache:
         cached = _captain_suggestion_cache[cache_key]
     else:
         history = _build_history_summary(db)
         patterns = _build_pattern_summary(db, boat_codes)
         ships_text = json.dumps(ships_in_port, indent=2)
-        uncovered_text = ", ".join(uncovered_ships)
+        undercovered_text = json.dumps(undercovered_ships, indent=2)
 
         system = (
-            "You assign tour boat captains to cruise ships in Ketchikan, Alaska. "
-            "Follow dispatch rules: one boat per ship at a time, alphabetical boat priority, "
-            "3-hour minimum turnaround between tours for the same boat. "
-            "Return valid JSON only."
+            "You assign tour boat operators to cruise ships in Ketchikan, Alaska. "
+            "Large cruise ships often need multiple tour boats at the same time — "
+            "some ships need more boats than others based on passenger capacity. "
+            "Follow dispatch rules: each boat serves one ship at a time, "
+            "alphabetical boat priority, 3-hour minimum turnaround between tours "
+            "for the same boat. Return valid JSON only."
         )
         user = (
             f"{history}\n\n{patterns}\n\n"
             f"Date: {target_date.isoformat()} ({DAY_NAMES[target_date.weekday()]})\n"
             f"Ships in port: {ships_text}\n"
             f"Available boat codes (alphabetical dispatch order): {', '.join(sorted(boat_codes))}\n"
-            f"Ships needing captain assignments: {uncovered_text}\n\n"
-            "Suggest captain assignments for the uncovered ships only. "
-            "Return JSON array:\n"
+            f"Ships needing more boat assignments: {undercovered_text}\n\n"
+            "Suggest additional tour boat assignments. Larger ships may need multiple "
+            "boats simultaneously. Return JSON array — one object per boat assignment:\n"
             '[{"boat_code": "DrmC", "ship": "Ship Name", "checkin_time": "7:00 AM", '
             '"return_time": "3:00 PM", "confidence": 0.55, "reason": "brief reason"}]\n'
-            "Use boat codes from the available list. Confidence 0.4-0.75 for AI suggestions."
+            "Use boat codes from the available list. Assign only the number of boats still "
+            "needed per ship. Confidence 0.4-0.75 for AI suggestions."
         )
 
         data = _call_openai_json(system, user)
@@ -244,6 +249,8 @@ def ai_suggest_captain_shifts(
     _, busy_score = estimate_daily_passengers(
         db, [s.get("ship", "") for s in ships_in_port if s.get("ship")]
     )
+
+    undercovered_names = {str(item.get("ship", "")).strip() for item in undercovered_ships}
 
     candidates: list[ShiftCandidate] = []
     for row in cached:
@@ -257,7 +264,7 @@ def ai_suggest_captain_shifts(
             continue
         if boat not in boat_codes:
             continue
-        if not any(_ship_matches(ship, u) for u in uncovered_ships):
+        if not any(_ship_matches(ship, name) for name in undercovered_names):
             continue
 
         try:

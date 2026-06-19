@@ -35,7 +35,6 @@ KNOWN_TOUR_BOAT_CODES = frozenset(
         "FNF",
         "SR",
         "SL",
-        "SL",
         "50/50",
         "DRMC",
     }
@@ -135,8 +134,45 @@ def split_dispatch_codes(boat_codes: str) -> list[str]:
     """Split boat_codes field and return only tour-boat / captain codes."""
     if not boat_codes:
         return []
-    parts = [c.strip() for c in boat_codes.split(",") if c.strip()]
-    return [code for code in parts if is_captain_boat_code(code)]
+
+    text = boat_codes
+    placeholders: dict[str, str] = {}
+    for code in sorted(KNOWN_TOUR_BOAT_CODES, key=len, reverse=True):
+        if "/" not in code:
+            continue
+        token = f"__SLASHCODE_{len(placeholders)}__"
+        placeholders[token] = code
+        text = re.sub(re.escape(code), token, text, flags=re.IGNORECASE)
+
+    parts = re.split(r"[,;/]+|\s+and\s+", text, flags=re.IGNORECASE)
+    seen: set[str] = set()
+    result: list[str] = []
+    for part in parts:
+        code = part.strip()
+        if code in placeholders:
+            code = placeholders[code]
+        if not code or not is_captain_boat_code(code):
+            continue
+        key = code.upper()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(code)
+    return result
+
+
+def merge_dispatch_codes(*values: str | None) -> str:
+    """Merge boat code strings, deduplicating while preserving order."""
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        for code in split_dispatch_codes(value or ""):
+            key = code.upper()
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append(code)
+    return ", ".join(result)
 
 
 def repair_boat_berth_value(boat_codes: str | None, berth: str | None) -> tuple[str, str | None]:
