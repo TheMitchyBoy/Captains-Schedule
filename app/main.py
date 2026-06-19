@@ -20,6 +20,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.ai_predictor import clear_ai_prediction_cache
 from app.config import get_openai_status, get_settings, init_openai_verification
+from app.csv_parser import import_csv_schedules, looks_like_csv
 from app.xml_parser import import_schedules
 from app.database import get_db, get_database_label, get_database_path, init_db, DATA_DIR
 from app.models import CaptainPattern, ScheduleEntry, ShipCapacity, UploadLog
@@ -52,6 +53,8 @@ def _resolve_upload_filename(filename: str | None, content_type: str | None) -> 
     """Use the uploaded filename, or fall back when browsers omit it on drag-and-drop."""
     if filename and filename.strip():
         return filename.strip()
+    if content_type and "csv" in content_type.lower():
+        return "upload.csv"
     if content_type and "xml" in content_type.lower():
         return "upload.xml"
     return "upload.xml"
@@ -95,6 +98,36 @@ def _looks_like_xml(filename: str | None, content_type: str | None, content: byt
     if lower.startswith("<?xml") or lower.startswith("<"):
         return any(tag in lower for tag in ("<schedules", "<schedule", "<entry", "<dispatch"))
     return False
+
+
+def _finalize_upload(
+    db: Session,
+    batch_id: str,
+    filename: str,
+    imported: int,
+    skipped: int,
+    errors: list[str],
+    *,
+    replaced: int = 0,
+) -> UploadResult:
+    """Rebuild patterns after a successful import and return API response."""
+    rebuild_patterns(db)
+    clear_ai_prediction_cache()
+
+    notes_parts: list[str] = []
+    if replaced:
+        notes_parts.append(f"Replaced {replaced} existing schedule rows")
+    if errors:
+        notes_parts.extend(errors[:5])
+
+    return UploadResult(
+        batch_id=batch_id,
+        filename=filename,
+        rows_imported=imported,
+        rows_skipped=skipped,
+        notes="; ".join(notes_parts) if notes_parts else None,
+    )
+
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
@@ -235,13 +268,64 @@ async def clean_xml_json(payload: dict = Body(...)):
     return _clean_result_response(result)
 
 
+@app.post("/api/upload-csv", response_model=UploadResult)
+async def upload_csv(
+    file: UploadFile = File(...),
+    replace: bool = Query(default=False, description="Delete all existing schedule data before import"),
+    db: Session = Depends(get_db),
+):
+    """
+    Upload a cruise ship schedule CSV file and save it to the database.
+
+    Expected columns (flexible names): date, ship, arrival, departure, berth
+    Set replace=true to wipe incorrect schedule data before importing the CSV.
+    """
+    try:
+        content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty")
+
+        filename = file.filename.strip() if file.filename else "upload.csv"
+        if not looks_like_csv(file.filename, file.content_type, content):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Could not recognize file as a schedule CSV. "
+                    "Include headers such as: date, ship, arrival, departure, berth"
+                ),
+            )
+
+        from app.schedule_import import clear_schedule_data
+
+        replaced = clear_schedule_data(db) if replace else 0
+        batch_id, imported, skipped, errors = import_csv_schedules(
+            db, content, filename, replace_existing=False
+        )
+
+        if imported == 0 and skipped == 0:
+            detail = errors[0] if errors else "No valid rows could be imported from this CSV"
+            raise HTTPException(status_code=400, detail=detail)
+
+        result = _finalize_upload(
+            db, batch_id, filename, imported, skipped, errors, replaced=replaced
+        )
+        return result
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"CSV upload failed: {exc}") from exc
+
+
 @app.post("/api/upload", response_model=UploadResult)
 async def upload_xml(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
     """
-    Accept a dispatch XML upload, persist rows, and rebuild prediction patterns.
+    Accept a dispatch XML or schedule CSV upload, persist rows, and rebuild patterns.
 
     Returns counts of imported vs. skipped (duplicate) rows. Entry-level parse
     warnings are included in the `notes` field.
@@ -252,27 +336,27 @@ async def upload_xml(
             raise HTTPException(status_code=400, detail="Uploaded file is empty")
 
         filename = _resolve_upload_filename(file.filename, file.content_type)
-        if not _looks_like_xml(file.filename, file.content_type, content):
+        if file.filename and file.filename.lower().endswith(".csv"):
+            filename = file.filename.strip()
+
+        if looks_like_csv(file.filename, file.content_type, content):
+            batch_id, imported, skipped, errors = import_csv_schedules(db, content, filename)
+        elif _looks_like_xml(file.filename, file.content_type, content):
+            batch_id, imported, skipped, errors = import_schedules(db, content, filename)
+        else:
             raise HTTPException(
                 status_code=400,
-                detail="Could not recognize file as XML. Use an .xml file with <schedule> entries containing: date_header, ship, checkin_time, return_time, boat_codes",
+                detail=(
+                    "Could not recognize file type. Upload .csv (date, ship, arrival, departure) "
+                    "or .xml dispatch schedule files."
+                ),
             )
 
-        batch_id, imported, skipped, errors = import_schedules(db, content, filename)
-        rebuild_patterns(db)
-        clear_ai_prediction_cache()
-
         if imported == 0 and skipped == 0:
-            detail = errors[0] if errors else "No valid entries could be imported from this XML"
+            detail = errors[0] if errors else "No valid entries could be imported"
             raise HTTPException(status_code=400, detail=detail)
 
-        return UploadResult(
-            batch_id=batch_id,
-            filename=filename,
-            rows_imported=imported,
-            rows_skipped=skipped,
-            notes="; ".join(errors[:5]) if errors else None,
-        )
+        return _finalize_upload(db, batch_id, filename, imported, skipped, errors)
     except HTTPException:
         raise
     except ValueError as exc:

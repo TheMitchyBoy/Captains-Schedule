@@ -21,14 +21,12 @@ Expected XML structure (element aliases also accepted — see FIELD_ALIASES):
 """
 
 import re
-import uuid
 import xml.etree.ElementTree as ET
 from datetime import date, datetime
 
 from sqlalchemy.orm import Session
 
-from app.models import ScheduleEntry, UploadLog
-from app.ship_data import get_ship_capacity
+from app.schedule_import import persist_schedule_rows
 
 # Canonical field names every valid dispatch XML entry must provide.
 REQUIRED_FIELDS = {
@@ -317,9 +315,6 @@ def import_schedules(db: Session, content: bytes, filename: str) -> tuple[str, i
 
     Returns (batch_id, rows_imported, rows_skipped, parse_errors).
     """
-    batch_id = str(uuid.uuid4())
-
-    # Clean and repair raw XML before database import (time normalization, boat field fixes).
     from app.xml_cleaner import clean_xml_bytes
 
     cleaned_content, clean_report = clean_xml_bytes(content)
@@ -335,76 +330,4 @@ def import_schedules(db: Session, content: bytes, filename: str) -> tuple[str, i
         )
         errors = [repair_note, *errors]
 
-    imported = 0
-    skipped = 0
-    seen_in_batch: set[tuple] = set()  # Prevent duplicate inserts within one XML commit
-
-    for row in rows:
-        key = (
-            row["schedule_date"],
-            row["ship"],
-            row["checkin_time"],
-            row["return_time"],
-            row["boat_codes"],
-        )
-        if key in seen_in_batch:
-            skipped += 1
-            continue
-        seen_in_batch.add(key)
-
-        existing = (
-            db.query(ScheduleEntry)
-            .filter(
-                ScheduleEntry.schedule_date == row["schedule_date"],
-                ScheduleEntry.ship == row["ship"],
-                ScheduleEntry.checkin_time == row["checkin_time"],
-                ScheduleEntry.return_time == row["return_time"],
-                ScheduleEntry.boat_codes == row["boat_codes"],
-            )
-            .first()
-        )
-        if existing:
-            existing.date_header = row["date_header"]
-            existing.ship_count = row["ship_count"]
-            existing.upload_batch_id = batch_id
-            skipped += 1
-            continue
-
-        get_ship_capacity(db, row["ship"])
-
-        # Truncate to column max lengths to avoid database constraint errors.
-        entry = ScheduleEntry(
-            date_header=row["date_header"][:255],
-            schedule_date=row["schedule_date"],
-            ship=row["ship"][:255],
-            checkin_time=row["checkin_time"][:32],
-            return_time=row["return_time"][:32],
-            boat_codes=row["boat_codes"][:255],
-            ship_count=row["ship_count"],
-            upload_batch_id=batch_id,
-        )
-        db.add(entry)
-        imported += 1
-
-    if not rows and not errors:
-        errors.append("No valid rows found in XML")
-
-    notes = "; ".join(errors[:10]) if errors else None
-    if errors and len(errors) > 10:
-        notes += f" ... and {len(errors) - 10} more"
-
-    log = UploadLog(
-        batch_id=batch_id,
-        filename=filename,
-        rows_imported=imported,
-        rows_skipped=skipped,
-        notes=notes,
-    )
-    db.add(log)
-    try:
-        db.commit()
-    except Exception as exc:
-        db.rollback()
-        raise ValueError(f"Database error while saving schedules: {exc}") from exc
-
-    return batch_id, imported, skipped, errors
+    return persist_schedule_rows(db, rows, filename, errors)

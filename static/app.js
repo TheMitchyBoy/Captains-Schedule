@@ -318,6 +318,54 @@ async function loadAiStatus() {
   }
 }
 
+/** Upload CSV schedule file to the database. */
+async function uploadCsvSchedule(file, replaceExisting) {
+  const form = new FormData();
+  form.append("file", file, file.name || "schedule.csv");
+  const url = `/api/upload-csv?replace=${replaceExisting ? "true" : "false"}`;
+  const res = await fetch(API + url, { method: "POST", body: form });
+  if (!res.ok) {
+    throw new Error(await readErrorDetail(res));
+  }
+  return res.json();
+}
+
+async function handleCsvUpload(fileList) {
+  const resultEl = $("#csvUploadResult");
+  const files = Array.from(fileList || []);
+  if (!files.length) return;
+
+  const replaceExisting = $("#csvReplaceExisting").checked;
+  resultEl.classList.remove("hidden", "success", "error");
+  resultEl.textContent = "Uploading CSV schedule to database...";
+  $("#csvUploadBtn").disabled = true;
+
+  try {
+    const file = files[0];
+    const data = await uploadCsvSchedule(file, replaceExisting);
+    resultEl.classList.add("success");
+    const parts = [`✓ ${file.name}: ${data.rows_imported} rows saved`];
+    if (data.rows_skipped) parts.push(`${data.rows_skipped} unchanged`);
+    if (data.notes) parts.push(data.notes);
+    resultEl.textContent = parts.join(" · ");
+    await refreshAll();
+    switchTab("schedules");
+  } catch (e) {
+    resultEl.classList.add("error");
+    resultEl.textContent = "CSV upload failed: " + e.message;
+  } finally {
+    $("#csvUploadBtn").disabled = false;
+    $("#csvUploadInput").value = "";
+  }
+}
+
+function setupCsvUpload() {
+  $("#csvUploadBtn").addEventListener("click", () => $("#csvUploadInput").click());
+  $("#csvUploadInput").addEventListener("change", () => {
+    handleCsvUpload($("#csvUploadInput").files);
+  });
+}
+
 /** Upload a File object directly to the database (skips clean step). */
 async function uploadFileToDatabase(file) {
   const form = new FormData();
@@ -574,6 +622,7 @@ function setupControls() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  setupCsvUpload();
   setupDirectUpload();
   setupRepair();
   setupTabs();

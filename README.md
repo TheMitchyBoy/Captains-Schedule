@@ -4,6 +4,7 @@ Upload cruise dispatch XML schedules, store them in a SQLite database, and predi
 
 ## Features
 
+- **CSV schedule upload** — Upload corrected cruise ship schedule CSV files directly (date, ship, arrival, departure, berth). Optionally replace bad data in one step
 - **XML upload** — Drag-and-drop dispatch schedules with elements: `date_header`, `ship`, `checkin_time`, `return_time`, `boat_codes`
 - **Persistent database** — Upload XML a few times; all schedule data is saved to SQLite. Return anytime and predictions load automatically — no need to re-upload every day
 - **Captain predictions** — Learns day-of-week patterns per captain/boat code and forecasts shifts up to 365 days ahead
@@ -25,8 +26,23 @@ Open [http://localhost:8000](http://localhost:8000) in your browser.
 Upload the included sample file to try it out:
 
 ```
+sample_data/ketchikan_schedule.csv
 sample_data/sample_schedule.xml
 ```
+
+## CSV Format
+
+Upload a `.csv` file with headers such as:
+
+| Column (flexible names) | Description |
+| ----------------------- | ----------- |
+| date / schedule_date    | Port date (`2026-06-04`, `6/4/2026`, or `Thursday 6/4 - 5 ships`) |
+| ship / vessel           | Cruise ship name |
+| arrival / checkin_time  | Tour check-in or ship arrival time |
+| departure / return_time | Tour return or ship departure time |
+| berth / boat_codes      | Berth or boat assignment (optional — auto-assigned if blank) |
+
+Use **Replace existing schedule data** when uploading a corrected file to wipe incorrect entries first.
 
 ## XML Format
 
@@ -96,7 +112,8 @@ Optional AI-assisted recovery for badly malformed XML runs automatically when `O
 
 | Method | Path                  | Description                          |
 | ------ | --------------------- | ------------------------------------ |
-| POST   | `/api/upload`         | Upload an XML file (auto-cleaned on import) |
+| POST   | `/api/upload-csv`     | Upload a schedule CSV (optional `?replace=true`) |
+| POST   | `/api/upload`         | Upload CSV or XML file (auto-cleaned on XML import) |
 | POST   | `/api/clean-xml`      | Clean/repair XML (file upload or form field) |
 | POST   | `/api/clean-xml/json` | Clean/repair XML (`{"xml": "..."}` body)     |
 | GET    | `/api/schedules`      | List stored schedule entries         |

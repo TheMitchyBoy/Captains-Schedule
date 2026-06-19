@@ -42,7 +42,33 @@
     </header>
 
     <main class="main">
-      <!-- Step 1: Clean XML — always the first thing on the page -->
+      <!-- CSV schedule upload — primary path for corrected cruise ship data -->
+      <section class="card hero-section csv-section" id="csvUploadSection">
+        <div class="hero-header">
+          <div>
+            <h2>Upload Cruise Ship Schedule (CSV)</h2>
+            <p class="card-desc">Upload your corrected Ketchikan schedule CSV. Data is saved to the database permanently — upload once and return anytime for predictions.</p>
+          </div>
+        </div>
+
+        <div class="csv-format-hint">
+          <strong>Expected columns:</strong>
+          <code>date</code>, <code>ship</code>, <code>arrival</code>, <code>departure</code>, <code>berth</code>
+          (flexible names like schedule_date, vessel, checkin_time, return_time, boat_codes also work)
+        </div>
+
+        <div class="direct-upload-row">
+          <input type="file" id="csvUploadInput" accept=".csv,text/csv,application/vnd.ms-excel" hidden />
+          <button type="button" class="btn primary-action" id="csvUploadBtn">Choose CSV File</button>
+          <label class="replace-checkbox">
+            <input type="checkbox" id="csvReplaceExisting" checked />
+            Replace existing schedule data (recommended when fixing bad data)
+          </label>
+        </div>
+        <div id="csvUploadResult" class="upload-result hidden"></div>
+      </section>
+
+      <!-- Optional XML clean / repair workflow -->
       <section class="card hero-section" id="cleanSection">
         <div class="hero-header">
           <div>
