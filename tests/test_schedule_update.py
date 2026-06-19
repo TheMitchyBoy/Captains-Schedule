@@ -1,0 +1,96 @@
+"""Tests for manual schedule row updates."""
+
+from datetime import date
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from app.database import Base
+from app.models import ScheduleEntry
+from app.schedule_update import update_schedule_entry
+
+
+def _make_session():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+    return Session()
+
+
+def _add_entry(db, **overrides):
+    data = dict(
+        date_header="Sunday 5/3",
+        schedule_date=date(2026, 5, 3),
+        ship="Carnival Spirit",
+        checkin_time="07:00",
+        return_time="11:30",
+        boat_codes="",
+        berth=None,
+        ship_count=1,
+        upload_batch_id="batch-a",
+    )
+    data.update(overrides)
+    entry = ScheduleEntry(**data)
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return entry
+
+
+def test_update_boat_codes_and_times():
+    db = _make_session()
+    entry = _add_entry(db)
+
+    updated = update_schedule_entry(
+        db,
+        entry.id,
+        checkin_time="7am",
+        return_time="11:30am",
+        boat_codes="JR, LewE",
+    )
+
+    assert updated.checkin_time == "07:00"
+    assert updated.return_time == "11:30"
+    assert updated.boat_codes == "JR, LewE"
+    db.close()
+
+
+def test_update_rejects_duplicate_row():
+    db = _make_session()
+    first = _add_entry(db, boat_codes="JR, LewE")
+    second = _add_entry(
+        db,
+        checkin_time="11:00",
+        return_time="15:15",
+        boat_codes="BW",
+    )
+
+    try:
+        update_schedule_entry(
+            db,
+            second.id,
+            checkin_time="07:00",
+            return_time="11:30",
+            boat_codes="JR, LewE",
+        )
+        assert False, "expected ValueError"
+    except ValueError as exc:
+        assert "already exists" in str(exc).lower()
+
+    unchanged = db.query(ScheduleEntry).filter(ScheduleEntry.id == second.id).one()
+    assert unchanged.checkin_time == "11:00"
+    assert unchanged.boat_codes == "BW"
+    assert first.boat_codes == "JR, LewE"
+    db.close()
+
+
+def test_update_requires_at_least_one_field():
+    db = _make_session()
+    entry = _add_entry(db, boat_codes="BW")
+
+    try:
+        update_schedule_entry(db, entry.id)
+        assert False, "expected ValueError"
+    except ValueError as exc:
+        assert "at least one field" in str(exc).lower()
+    db.close()

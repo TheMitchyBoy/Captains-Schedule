@@ -134,6 +134,112 @@ function formatBoatCodes(value) {
   return codes.map((c) => `<code>${c}</code>`).join(" ");
 }
 
+function escapeAttr(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;");
+}
+
+let scheduleRows = [];
+let editingScheduleId = null;
+
+function renderScheduleRow(s) {
+  if (editingScheduleId === s.id) {
+    return `
+      <tr class="schedule-row-editing" data-id="${s.id}">
+        <td>${formatDate(s.schedule_date)}</td>
+        <td>${s.date_header}</td>
+        <td>${s.ship}</td>
+        <td><input type="text" class="schedule-edit-input" data-field="checkin_time" value="${escapeAttr(s.checkin_time)}" aria-label="Check-in time" /></td>
+        <td><input type="text" class="schedule-edit-input" data-field="return_time" value="${escapeAttr(s.return_time)}" aria-label="Return time" /></td>
+        <td>${s.berth ? `<code>${s.berth}</code>` : "—"}</td>
+        <td><input type="text" class="schedule-edit-input schedule-edit-boats" data-field="boat_codes" value="${escapeAttr(s.boat_codes)}" placeholder="BW, BWA, JR" aria-label="Boat codes" /></td>
+        <td class="schedule-actions">
+          <button type="button" class="btn btn-sm schedule-save-btn" data-id="${s.id}">Save</button>
+          <button type="button" class="btn secondary btn-sm schedule-cancel-btn" data-id="${s.id}">Cancel</button>
+        </td>
+      </tr>`;
+  }
+  return `
+    <tr data-id="${s.id}">
+      <td>${formatDate(s.schedule_date)}</td>
+      <td>${s.date_header}</td>
+      <td>${s.ship}</td>
+      <td>${s.checkin_time}</td>
+      <td>${s.return_time}</td>
+      <td>${s.berth ? `<code>${s.berth}</code>` : "—"}</td>
+      <td>${formatBoatCodes(s.boat_codes)}</td>
+      <td class="schedule-actions">
+        <button type="button" class="btn secondary btn-sm schedule-edit-btn" data-id="${s.id}">Edit</button>
+      </td>
+    </tr>`;
+}
+
+function renderSchedulesTable() {
+  const tbody = $("#schedulesBody");
+  if (!scheduleRows.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty">No schedules stored</td></tr>';
+    return;
+  }
+  tbody.innerHTML = scheduleRows.map(renderScheduleRow).join("");
+}
+
+async function saveScheduleEdit(id) {
+  const row = document.querySelector(`tr.schedule-row-editing[data-id="${id}"]`);
+  if (!row) return;
+
+  const payload = {};
+  row.querySelectorAll(".schedule-edit-input").forEach((input) => {
+    payload[input.dataset.field] = input.value.trim();
+  });
+
+  const saveBtn = row.querySelector(".schedule-save-btn");
+  saveBtn.disabled = true;
+  try {
+    const res = await fetch(API + `/api/schedules/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(await readErrorDetail(res));
+    const updated = await res.json();
+    scheduleRows = scheduleRows.map((s) => (s.id === id ? updated : s));
+    editingScheduleId = null;
+    renderSchedulesTable();
+    await Promise.all([loadStats(), loadPredictions(), loadCaptainOverview()]);
+  } catch (e) {
+    alert("Could not save changes: " + e.message);
+  } finally {
+    saveBtn.disabled = false;
+  }
+}
+
+function setupScheduleEditing() {
+  const tbody = $("#schedulesBody");
+  if (!tbody) return;
+  tbody.addEventListener("click", (e) => {
+    const editBtn = e.target.closest(".schedule-edit-btn");
+    if (editBtn) {
+      editingScheduleId = Number(editBtn.dataset.id);
+      renderSchedulesTable();
+      const input = tbody.querySelector(`tr[data-id="${editingScheduleId}"] .schedule-edit-input`);
+      input?.focus();
+      return;
+    }
+    const cancelBtn = e.target.closest(".schedule-cancel-btn");
+    if (cancelBtn) {
+      editingScheduleId = null;
+      renderSchedulesTable();
+      return;
+    }
+    const saveBtn = e.target.closest(".schedule-save-btn");
+    if (saveBtn) {
+      saveScheduleEdit(Number(saveBtn.dataset.id));
+    }
+  });
+}
+
 function groupPredictionsByShip(rows) {
   const groups = new Map();
   for (const row of rows) {
@@ -300,26 +406,12 @@ async function loadUploads() {
 }
 
 async function loadSchedules() {
-  const tbody = $("#schedulesBody");
   try {
-    const data = await fetchJSON("/api/schedules?limit=200");
-    if (!data.length) {
-      tbody.innerHTML = '<tr><td colspan="7" class="empty">No schedules stored</td></tr>';
-      return;
-    }
-    tbody.innerHTML = data.map((s) => `
-      <tr>
-        <td>${formatDate(s.schedule_date)}</td>
-        <td>${s.date_header}</td>
-        <td>${s.ship}</td>
-        <td>${s.checkin_time}</td>
-        <td>${s.return_time}</td>
-        <td>${s.berth ? `<code>${s.berth}</code>` : "—"}</td>
-        <td>${formatBoatCodes(s.boat_codes)}</td>
-      </tr>
-    `).join("");
+    scheduleRows = await fetchJSON("/api/schedules?limit=200");
+    editingScheduleId = null;
+    renderSchedulesTable();
   } catch (e) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty">Error loading schedules</td></tr>';
+    $("#schedulesBody").innerHTML = '<tr><td colspan="8" class="empty">Error loading schedules</td></tr>';
   }
 }
 
@@ -682,6 +774,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupRepair();
   setupTabs();
   setupControls();
+  setupScheduleEditing();
   refreshAll();
   // Focus raw input so users can paste immediately
   $("#rawXmlInput").focus();
