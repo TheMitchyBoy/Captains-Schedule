@@ -33,7 +33,8 @@ class ScheduleEntry(Base):
     ship: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     checkin_time: Mapped[str] = mapped_column(String(32), nullable=False)
     return_time: Mapped[str] = mapped_column(String(32), nullable=False)
-    boat_codes: Mapped[str] = mapped_column(String(255), nullable=False, index=True)  # May contain multiple codes: "CPT-A / OP-12"
+    boat_codes: Mapped[str] = mapped_column(String(255), nullable=False, index=True)  # Tour boat / captain dispatch codes: "CPT-A / OP-12"
+    berth: Mapped[str | None] = mapped_column(String(64), nullable=True)  # Port berth/dock code: WW, BW, 1, AN3 — not a tour boat
     ship_count: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Parsed from date_header when available
     upload_batch_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)  # Groups rows from the same XML upload
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

@@ -276,7 +276,7 @@ async function loadSchedules() {
   try {
     const data = await fetchJSON("/api/schedules?limit=200");
     if (!data.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="empty">No schedules stored</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="empty">No schedules stored</td></tr>';
       return;
     }
     tbody.innerHTML = data.map((s) => `
@@ -286,11 +286,12 @@ async function loadSchedules() {
         <td>${s.ship}</td>
         <td>${s.checkin_time}</td>
         <td>${s.return_time}</td>
+        <td>${s.berth ? `<code>${s.berth}</code>` : "—"}</td>
         <td><code>${s.boat_codes}</code></td>
       </tr>
     `).join("");
   } catch (e) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty">Error loading schedules</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="empty">Error loading schedules</td></tr>';
   }
 }
 

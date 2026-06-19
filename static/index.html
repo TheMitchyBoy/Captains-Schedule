@@ -54,7 +54,7 @@
         <div class="csv-format-hint">
           <strong>Expected columns:</strong>
           <code>date</code>, <code>ship</code>, <code>arrival</code>, <code>departure</code>, <code>berth</code>
-          (flexible names like schedule_date, vessel, checkin_time, return_time, boat_codes also work)
+          — Berth (WW, BW, BWA, 1) is where the cruise ship docks. Captain/tour boat codes (CPT-A) are assigned automatically for predictions.
         </div>
 
         <div class="direct-upload-row">
@@ -248,11 +248,12 @@
                   <th>Ship</th>
                   <th>Check-in</th>
                   <th>Return</th>
-                  <th>Boat Codes</th>
+                  <th>Berth</th>
+                  <th>Boat / Captain</th>
                 </tr>
               </thead>
               <tbody id="schedulesBody">
-                <tr><td colspan="6" class="empty">No schedules stored</td></tr>
+                <tr><td colspan="7" class="empty">No schedules stored</td></tr>
               </tbody>
             </table>
           </div>

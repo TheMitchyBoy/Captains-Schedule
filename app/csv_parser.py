@@ -21,6 +21,7 @@ from datetime import date, datetime
 
 from sqlalchemy.orm import Session
 
+from app.berth_utils import is_captain_boat_code, looks_like_berth_code, normalize_berth
 from app.schedule_import import clear_schedule_data, persist_schedule_rows
 from app.xml_cleaner import normalize_time_24h
 from app.xml_parser import (
@@ -77,13 +78,22 @@ CSV_COLUMN_ALIASES: dict[str, list[str]] = {
         "end",
     ],
     "boat_codes": [
-        *FIELD_ALIASES["boat_codes"],
+        "boat_codes",
+        "boat_code",
+        "captain",
+        "captain_code",
+        "tour_boat",
+        "operator_code",
+        "dispatch_boat",
+    ],
+    "berth": [
         "berth",
         "berth_code",
+        "berth_location",
         "dock",
         "pier",
-        "assignment",
-        "operator_code",
+        "dock_code",
+        "port_berth",
     ],
 }
 
@@ -168,6 +178,28 @@ def _build_date_header(schedule_date: date, ship_count: int | None = None) -> st
         label = "ship" if ship_count == 1 else "ships"
         header += f" - {ship_count} {label}"
     return header
+
+
+def _resolve_boat_and_berth(row: dict[str, str]) -> tuple[str, str | None]:
+    """
+    Separate port berth codes from captain/tour-boat dispatch codes.
+
+    Berth values (WW, BW, BWA, 1, AN3) must never become boat_codes.
+    """
+    raw_boat = row.get("boat_codes", "").strip()
+    raw_berth = row.get("berth", "").strip()
+
+    if raw_boat and looks_like_berth_code(raw_boat) and not raw_berth:
+        raw_berth = normalize_berth(raw_boat)
+        raw_boat = ""
+
+    if raw_boat and raw_berth and looks_like_berth_code(raw_boat):
+        raw_berth = normalize_berth(raw_boat)
+        raw_boat = ""
+
+    berth = normalize_berth(raw_berth) if raw_berth else None
+    boat_codes = raw_boat if raw_boat and is_captain_boat_code(raw_boat) else ""
+    return boat_codes, berth
 
 
 def _assign_boat_codes_by_day(rows: list[dict]) -> None:
@@ -301,10 +333,7 @@ def parse_csv_content(content: bytes, filename: str = "upload.csv") -> tuple[lis
         if not checkin_time or not return_time:
             continue
 
-        boat_codes = row.get("boat_codes", "").strip()
-        if boat_codes and not boat_codes.upper().startswith("CPT"):
-            # Berth codes like WW, 1, AN3 — prefix for clarity in boat assignment field.
-            boat_codes = f"BERTH-{boat_codes}"
+        boat_codes, berth = _resolve_boat_and_berth(row)
 
         if not date_header:
             date_header = _build_date_header(schedule_date)
@@ -317,6 +346,7 @@ def parse_csv_content(content: bytes, filename: str = "upload.csv") -> tuple[lis
                 "checkin_time": checkin_time,
                 "return_time": return_time,
                 "boat_codes": boat_codes,
+                "berth": berth,
                 "ship_count": ship_count,
             }
         )

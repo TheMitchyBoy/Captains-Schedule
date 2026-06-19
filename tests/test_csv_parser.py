@@ -12,7 +12,8 @@ def test_parse_ketchikan_sample_csv():
     assert not errors
     assert rows[0]["ship"] == "Brilliant Lady"
     assert rows[0]["checkin_time"] == "09:00"
-    assert rows[0]["boat_codes"].startswith("BERTH-")
+    assert rows[0]["berth"] == "3"
+    assert rows[0]["boat_codes"] == "CPT-A"
 
 
 def test_looks_like_csv():

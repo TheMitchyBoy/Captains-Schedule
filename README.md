@@ -40,7 +40,8 @@ Upload a `.csv` file with headers such as:
 | ship / vessel           | Cruise ship name |
 | arrival / checkin_time  | Tour check-in or ship arrival time |
 | departure / return_time | Tour return or ship departure time |
-| berth / boat_codes      | Berth or boat assignment (optional — auto-assigned if blank) |
+| berth                   | Port dock location (WW, BW, BWA, 1, AN3) — **not** a tour boat name |
+| boat_code / captain     | Optional tour boat dispatch code (CPT-A). Auto-assigned if omitted |
 
 Use **Replace existing schedule data** when uploading a corrected file to wipe incorrect entries first.
 

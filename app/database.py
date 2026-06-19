@@ -124,3 +124,18 @@ def init_db():
     from app import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+    _migrate_schema()
+
+
+def _migrate_schema() -> None:
+    """Apply lightweight schema updates for existing databases."""
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+    if "schedule_entries" not in inspector.get_table_names():
+        return
+
+    columns = {col["name"] for col in inspector.get_columns("schedule_entries")}
+    if "berth" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE schedule_entries ADD COLUMN berth VARCHAR(64)"))

@@ -61,6 +61,7 @@ def persist_schedule_rows(
         if existing:
             existing.date_header = row["date_header"]
             existing.ship_count = row["ship_count"]
+            existing.berth = row.get("berth")
             existing.upload_batch_id = batch_id
             skipped += 1
             continue
@@ -74,6 +75,7 @@ def persist_schedule_rows(
             checkin_time=row["checkin_time"][:32],
             return_time=row["return_time"][:32],
             boat_codes=row["boat_codes"][:255],
+            berth=(row.get("berth") or None),
             ship_count=row["ship_count"],
             upload_batch_id=batch_id,
         )

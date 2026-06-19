@@ -33,12 +33,7 @@ from app.scheduler import ShiftCandidate, apply_scheduling_constraints
 from app.schemas import CaptainPrediction, CaptainSummary
 from app.ship_data import estimate_daily_passengers, get_ship_capacity, normalize_ship_name
 
-DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-
-
-def _split_boat_codes(boat_codes: str) -> list[str]:
-    """Split a boat_codes field into individual operator codes (handles comma and slash separators)."""
-    return [c.strip() for c in boat_codes.replace("/", ",").split(",") if c.strip()]
+from app.berth_utils import split_dispatch_codes
 
 
 def rebuild_patterns(db: Session) -> int:
@@ -61,7 +56,7 @@ def rebuild_patterns(db: Session) -> int:
 
     for entry in entries:
         dow = entry.schedule_date.weekday()
-        for code in _split_boat_codes(entry.boat_codes):
+        for code in split_dispatch_codes(entry.boat_codes):
             key = (code, dow, entry.ship, entry.checkin_time, entry.return_time)
             aggregates[key]["count"] += 1
             if entry.schedule_date > aggregates[key]["last_seen"]:

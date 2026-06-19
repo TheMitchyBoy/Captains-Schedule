@@ -21,6 +21,7 @@ class ScheduleEntryOut(BaseModel):
     checkin_time: str
     return_time: str
     boat_codes: str
+    berth: str | None = None
     ship_count: int | None
     upload_batch_id: str
     created_at: datetime
