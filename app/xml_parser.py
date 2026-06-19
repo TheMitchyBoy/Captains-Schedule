@@ -243,13 +243,8 @@ def _find_schedule_entries(root: ET.Element) -> list[ET.Element]:
     return found
 
 
-def parse_xml_content(content: bytes, filename: str = "upload.xml") -> tuple[list[dict], list[str]]:
-    """
-    Parse raw XML bytes into validated schedule row dicts.
-
-    Returns (parsed_rows, errors). Individual bad entries produce error messages
-    but do not fail the entire file — valid entries are still returned.
-    """
+def _parse_standard_xml_entries(content: bytes, filename: str) -> tuple[list[dict], list[str]]:
+    """Parse structured <schedule> XML entries."""
     errors: list[str] = []
 
     try:
@@ -259,7 +254,7 @@ def parse_xml_content(content: bytes, filename: str = "upload.xml") -> tuple[lis
 
     entries = _find_schedule_entries(root)
     if not entries:
-        return [], ["No schedule entries found in XML. Expected <schedule> elements with dispatch fields."]
+        return [], []
 
     raw_rows: list[dict] = []
     for idx, entry in enumerate(entries, start=1):
@@ -272,7 +267,7 @@ def parse_xml_content(content: bytes, filename: str = "upload.xml") -> tuple[lis
         raw_rows.append(fields)
 
     if not raw_rows:
-        return [], errors or ["No valid schedule entries found in XML"]
+        return [], errors
 
     reference_year = infer_reference_year(raw_rows)
     parsed_rows: list[dict] = []
@@ -301,6 +296,45 @@ def parse_xml_content(content: bytes, filename: str = "upload.xml") -> tuple[lis
                 "ship_count": ship_count,
             }
         )
+
+    return parsed_rows, errors
+
+
+def parse_xml_content(content: bytes, filename: str = "upload.xml") -> tuple[list[dict], list[str]]:
+    """
+    Parse raw XML bytes into validated schedule row dicts.
+
+    Extracts both structured <schedule> entries and MMS dispatch message tours.
+    Returns (parsed_rows, errors). Individual bad entries produce error messages
+    but do not fail the entire file — valid entries are still returned.
+    """
+    errors: list[str] = []
+
+    try:
+        ET.fromstring(content)
+    except ET.ParseError as exc:
+        # Still attempt MMS/text dispatch extraction from malformed XML.
+        from app.mms_dispatch_parser import extract_mms_dispatch_rows
+
+        dispatch_rows, dispatch_errors = extract_mms_dispatch_rows(content)
+        errors.append(f"Could not read XML: {exc}")
+        errors.extend(dispatch_errors)
+        if dispatch_rows:
+            return dispatch_rows, errors
+        return [], errors
+
+    parsed_rows, std_errors = _parse_standard_xml_entries(content, filename)
+    errors.extend(std_errors)
+
+    from app.mms_dispatch_parser import extract_mms_dispatch_rows, merge_dispatch_row_sets
+
+    dispatch_rows, dispatch_errors = extract_mms_dispatch_rows(content)
+    errors.extend(dispatch_errors)
+    if dispatch_rows:
+        parsed_rows = merge_dispatch_row_sets(parsed_rows, dispatch_rows)
+
+    if not parsed_rows:
+        return [], errors or ["No schedule entries found in XML. Expected <schedule> elements or MMS dispatch tour lines."]
 
     return parsed_rows, errors
 

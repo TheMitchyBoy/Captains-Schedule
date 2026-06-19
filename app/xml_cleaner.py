@@ -323,6 +323,48 @@ def _ai_extract_entries(raw_text: str) -> list[dict[str, str]] | None:
     return None
 
 
+def _entry_key(entry: dict[str, str]) -> tuple[str, str, str, str]:
+    return (
+        entry.get("date_header", "").strip(),
+        entry.get("ship", "").strip().lower(),
+        entry.get("checkin_time", "").strip(),
+        entry.get("return_time", "").strip(),
+    )
+
+
+def _supplement_with_mms_dispatch_entries(
+    text: str,
+    entries: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    """Add tour rows from MMS message bodies that structured parsing missed."""
+    from app.berth_utils import merge_dispatch_codes
+    from app.mms_dispatch_parser import extract_mms_dispatch_rows
+
+    mms_rows, _ = extract_mms_dispatch_rows(text)
+    if not mms_rows:
+        return entries
+
+    index = {_entry_key(entry): entry for entry in entries}
+    for row in mms_rows:
+        entry = {
+            "date_header": row["date_header"],
+            "ship": row["ship"],
+            "checkin_time": row["checkin_time"],
+            "return_time": row["return_time"],
+            "boat_codes": row["boat_codes"],
+        }
+        key = _entry_key(entry)
+        if key in index:
+            existing = index[key]
+            boats = merge_dispatch_codes(existing.get("boat_codes", ""), entry.get("boat_codes", ""))
+            if boats:
+                existing["boat_codes"] = boats
+        else:
+            entries.append(entry)
+            index[key] = entry
+    return entries
+
+
 def _entries_missing_fields(entries: list[dict[str, str]]) -> bool:
     """Return True if any entry is missing required dispatch fields."""
     for entry in entries:
@@ -350,9 +392,29 @@ def _extract_raw_entries(content: bytes | str) -> tuple[list[dict[str, str]], st
         entries = [_extract_entry_fields(elem) for elem in elements]
         entries = [e for e in entries if e]
         if entries:
+            entries = _supplement_with_mms_dispatch_entries(text, entries)
             return entries, "elementtree", errors
     except ET.ParseError as exc:
         errors.append(f"ElementTree parse failed: {exc}")
+
+    # MMS / text dispatch messages (multiple tours per message body).
+    from app.mms_dispatch_parser import extract_mms_dispatch_rows
+
+    mms_rows, mms_errors = extract_mms_dispatch_rows(text)
+    errors.extend(mms_errors)
+    if mms_rows:
+        mms_entries = [
+            {
+                "date_header": row["date_header"],
+                "ship": row["ship"],
+                "checkin_time": row["checkin_time"],
+                "return_time": row["return_time"],
+                "boat_codes": row["boat_codes"],
+            }
+            for row in mms_rows
+        ]
+        errors.append(f"Extracted {len(mms_entries)} tour dispatch rows from MMS/text messages.")
+        return mms_entries, "mms", errors
 
     # Fallback: regex extraction for broken but readable XML.
     regex_entries = _regex_extract_entries(text)
