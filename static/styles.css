@@ -459,6 +459,19 @@ tr.schedule-row-editing td {
   letter-spacing: normal;
 }
 
+.schedule-bulk-date input[type="date"] {
+  width: 11rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.875rem;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
 .schedule-bulk-text {
   width: 100%;
   background: var(--surface);

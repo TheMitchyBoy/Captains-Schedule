@@ -183,10 +183,14 @@ def create_schedule_entry(
 def bulk_create_schedule_entries(
     db: Session,
     text: str,
-    reference_year: int,
+    schedule_date: date,
 ) -> BulkCreateResult:
-    """Parse dispatch-style text and add every tour line to the database."""
-    rows, parse_errors = parse_tour_lines_from_text(text, reference_year)
+    """Parse dispatch-style tour lines for one day and add them to the database."""
+    rows, parse_errors = parse_tour_lines_from_text(
+        text,
+        schedule_date.year,
+        fixed_date=schedule_date,
+    )
     batch_id = f"manual-bulk-{uuid.uuid4()}"
 
     created = merged = skipped = 0

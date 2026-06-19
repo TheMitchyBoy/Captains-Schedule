@@ -359,8 +359,15 @@ async function bulkAddTours(event) {
   event.preventDefault();
   const resultEl = $("#bulkTourResult");
   const submitBtn = $("#bulkTourBtn");
+  const scheduleDate = $("#bulkTourDate").value;
   const text = $("#bulkTourText").value.trim();
-  const referenceYear = Number($("#bulkTourYear").value) || 2026;
+
+  if (!scheduleDate) {
+    resultEl.classList.remove("hidden", "success");
+    resultEl.classList.add("error");
+    resultEl.textContent = "Choose a date for these tours";
+    return;
+  }
 
   if (!text) {
     resultEl.classList.remove("hidden", "success");
@@ -377,7 +384,7 @@ async function bulkAddTours(event) {
     const res = await fetch(API + "/api/schedules/bulk", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, reference_year: referenceYear }),
+      body: JSON.stringify({ schedule_date: scheduleDate, text }),
     });
     if (!res.ok) throw new Error(await readErrorDetail(res));
     const data = await res.json();

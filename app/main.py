@@ -459,12 +459,12 @@ def create_schedules_bulk(
     payload: ScheduleBulkCreate,
     db: Session = Depends(get_db),
 ):
-    """Parse and add multiple tour lines from dispatch-style pasted text."""
+    """Parse and add multiple tour lines for a single day from pasted dispatch text."""
     text = payload.text.strip()
     if not text:
         raise HTTPException(status_code=400, detail="Paste one or more tour lines to import")
 
-    result = bulk_create_schedule_entries(db, text, payload.reference_year)
+    result = bulk_create_schedule_entries(db, text, payload.schedule_date)
     if result.rows_created == 0 and result.rows_merged == 0 and not result.rows_parsed:
         raise HTTPException(
             status_code=400,

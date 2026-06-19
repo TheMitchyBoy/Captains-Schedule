@@ -88,6 +88,27 @@ def test_carnival_spirit_at_7am_format():
     assert rows[0]["checkin_time"] == "07:00"
 
 
+def test_carnival_spirit_at_7am_format_with_fixed_day():
+    text = "C. Spirit (Carnival Spirit) — JR, LewE at 7am-11:30am"
+    rows, errors = parse_tour_lines_from_text(text, 2026, fixed_date=date(2026, 5, 3))
+    assert not errors
+    assert len(rows) == 1
+    assert rows[0]["ship"] == "Carnival Spirit"
+    assert rows[0]["schedule_date"] == date(2026, 5, 3)
+    assert rows[0]["checkin_time"] == "07:00"
+
+
+def test_parse_single_day_bulk_lines_without_dates():
+    text = """
+C. Spirit (Carnival Spirit) — JR, LewE — 7am-11:30am
+Eurodam — BW, BWA — 06:30–10:45
+"""
+    rows, errors = parse_tour_lines_from_text(text, 2026, fixed_date=date(2026, 5, 3))
+    assert not errors
+    assert len(rows) == 2
+    assert all(row["schedule_date"] == date(2026, 5, 3) for row in rows)
+
+
 def test_clean_xml_preserves_mms_tour_rows():
     from app.xml_cleaner import clean_xml_content
 

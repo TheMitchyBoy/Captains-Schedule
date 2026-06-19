@@ -234,17 +234,21 @@ def _row_from_tour_match(
     *,
     current_date: date | None,
     reference_year: int,
+    fixed_date: date | None = None,
 ) -> tuple[dict | None, str | None]:
-    month = match.groupdict().get("month")
-    day = match.groupdict().get("day")
-    schedule_date = current_date
-    if month and day:
-        try:
-            schedule_date = date(reference_year, int(month), int(day))
-        except ValueError:
-            return None, f"invalid date {month}/{day}"
-    elif schedule_date is None:
-        return None, "tour line missing date"
+    if fixed_date is not None:
+        schedule_date = fixed_date
+    else:
+        month = match.groupdict().get("month")
+        day = match.groupdict().get("day")
+        schedule_date = current_date
+        if month and day:
+            try:
+                schedule_date = date(reference_year, int(month), int(day))
+            except ValueError:
+                return None, f"invalid date {month}/{day}"
+        elif schedule_date is None:
+            return None, "tour line missing date"
 
     start = match.group("start")
     end = match.groupdict().get("end")
@@ -274,18 +278,19 @@ def parse_tour_lines_from_text(
     reference_year: int,
     *,
     default_date: date | None = None,
+    fixed_date: date | None = None,
 ) -> tuple[list[dict], list[str]]:
     """Parse free-text or message-body dispatch lines into schedule row dicts."""
     errors: list[str] = []
     rows: list[dict] = []
-    current_date = default_date
+    current_date = fixed_date or default_date
 
     for line_no, raw_line in enumerate(text.splitlines(), start=1):
         line = raw_line.strip()
         if not line or line.startswith("<!--"):
             continue
 
-        if _looks_like_date_header(line):
+        if fixed_date is None and _looks_like_date_header(line):
             header_date, _ = parse_date_from_header(line, reference_year)
             if header_date:
                 current_date = header_date
@@ -301,7 +306,12 @@ def parse_tour_lines_from_text(
                 errors.append(f"Line {line_no}: could not parse tour dispatch line: {line[:100]}")
             continue
 
-        row, err = _row_from_tour_match(match, current_date=current_date, reference_year=reference_year)
+        row, err = _row_from_tour_match(
+            match,
+            current_date=current_date,
+            reference_year=reference_year,
+            fixed_date=fixed_date,
+        )
         if err:
             errors.append(f"Line {line_no}: {err}")
             continue

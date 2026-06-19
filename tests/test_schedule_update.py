@@ -160,11 +160,10 @@ def test_create_rejects_exact_duplicate():
 def test_bulk_create_schedule_entries():
     db = _make_session()
     text = """
-Sunday 5/3
 C. Spirit (Carnival Spirit) — JR, LewE — 7am-11:30am
 Eurodam — BW, BWA — 06:30–10:45
 """
-    result = bulk_create_schedule_entries(db, text, 2026)
+    result = bulk_create_schedule_entries(db, text, date(2026, 5, 3))
 
     assert result.rows_parsed == 2
     assert result.rows_created == 2
@@ -172,6 +171,19 @@ Eurodam — BW, BWA — 06:30–10:45
     assert result.rows_skipped == 0
     assert not result.errors
     assert db.query(ScheduleEntry).count() == 2
+    for row in db.query(ScheduleEntry).all():
+        assert row.schedule_date == date(2026, 5, 3)
+    db.close()
+
+
+def test_bulk_create_ignores_inline_dates_when_day_selected():
+    db = _make_session()
+    text = "6/4 Eurodam — BW — 06:30–10:45"
+    result = bulk_create_schedule_entries(db, text, date(2026, 5, 3))
+
+    assert result.rows_parsed == 1
+    row = db.query(ScheduleEntry).one()
+    assert row.schedule_date == date(2026, 5, 3)
     db.close()
 
 
@@ -180,7 +192,7 @@ def test_bulk_create_merges_existing_slot():
     _add_entry(db, boat_codes="BW")
 
     text = "5/3 Carnival Spirit — JR, LewE — 07:00–11:30"
-    result = bulk_create_schedule_entries(db, text, 2026)
+    result = bulk_create_schedule_entries(db, text, date(2026, 5, 3))
 
     assert result.rows_parsed == 1
     assert result.rows_merged == 1
@@ -196,7 +208,7 @@ def test_bulk_create_skips_exact_duplicate():
     _add_entry(db, boat_codes="JR, LewE")
 
     text = "5/3 Carnival Spirit — JR, LewE — 07:00–11:30"
-    result = bulk_create_schedule_entries(db, text, 2026)
+    result = bulk_create_schedule_entries(db, text, date(2026, 5, 3))
 
     assert result.rows_parsed == 1
     assert result.rows_skipped == 1

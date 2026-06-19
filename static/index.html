@@ -14,7 +14,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Captain Schedule Predictor</title>
-  <link rel="stylesheet" href="/static/styles.css?v=20260619" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260620" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -196,21 +196,21 @@
           </div>
         </form>
         <form class="schedule-add-form schedule-bulk-form" id="bulkTourForm">
-          <h3>Bulk Add Tours</h3>
-          <p class="schedule-bulk-help">Paste dispatch lines — one tour per line. Use a date header or inline date like <code>5/3</code>.</p>
-          <label class="schedule-bulk-label">
-            Reference year
-            <input type="number" id="bulkTourYear" value="2026" min="2000" max="2100" />
+          <h3>Bulk Add Tours for One Day</h3>
+          <p class="schedule-bulk-help">Pick a date, then paste one tour per line — no date needed on each line.</p>
+          <label class="schedule-bulk-label schedule-bulk-date">
+            Date
+            <input type="date" id="bulkTourDate" required />
           </label>
           <label class="schedule-bulk-label">
             Tour lines
-            <textarea id="bulkTourText" class="schedule-bulk-text" rows="8" placeholder="Sunday 5/3
-C. Spirit (Carnival Spirit) — JR, LewE — 7am-11:30am
+            <textarea id="bulkTourText" class="schedule-bulk-text" rows="8" placeholder="C. Spirit (Carnival Spirit) — JR, LewE — 7am-11:30am
 Eurodam — BW, BWA — 06:30–10:45
-6/4 Koningsdam — DrmC, 50/50 — 11:00–15:15"></textarea>
+Koningsdam — DrmC, 50/50 — 11:00–15:15
+Island — BW, BWA at 6:15am-10:30am"></textarea>
           </label>
           <div class="schedule-add-actions">
-            <button type="submit" class="btn" id="bulkTourBtn">Add All Tours</button>
+            <button type="submit" class="btn" id="bulkTourBtn">Add All Tours for This Day</button>
             <span class="schedule-add-result hidden" id="bulkTourResult"></span>
           </div>
         </form>
@@ -347,6 +347,6 @@ Eurodam — BW, BWA — 06:30–10:45
     </footer>
   </div>
 
-  <script src="/static/app.js?v=20260619"></script>
+  <script src="/static/app.js?v=20260620"></script>
 </body>
 </html>

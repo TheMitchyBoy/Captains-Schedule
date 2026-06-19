@@ -50,10 +50,10 @@ class ScheduleEntryCreate(BaseModel):
 
 
 class ScheduleBulkCreate(BaseModel):
-    """Paste dispatch-style tour lines for POST /api/schedules/bulk."""
+    """Paste dispatch-style tour lines for one day via POST /api/schedules/bulk."""
 
+    schedule_date: date
     text: str
-    reference_year: int = Field(default=2026, ge=2000, le=2100)
 
 
 class ScheduleBulkResult(BaseModel):
