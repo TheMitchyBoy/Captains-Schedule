@@ -1,7 +1,8 @@
 """
 Application configuration loaded from environment variables.
 
-OpenAI is optional but enables AI-assisted recovery when XML is severely malformed.
+OpenAI is optional but enables AI-assisted XML recovery and prediction
+forecasting when OPENAI_API_KEY is set.
 Set OPENAI_API_KEY in your environment or in a `.env` file at the project root.
 """
 

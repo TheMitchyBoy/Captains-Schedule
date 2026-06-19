@@ -384,6 +384,29 @@ tr:hover td {
 .busy-med { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
 .busy-high { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
 
+.source-badge {
+  display: inline-block;
+  padding: 0.15em 0.5em;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.source-badge.pattern {
+  background: rgba(148, 163, 184, 0.2);
+  color: #cbd5e1;
+}
+
+.source-badge.ai {
+  background: rgba(139, 92, 246, 0.25);
+  color: #c4b5fd;
+}
+
+.cal-day.ai-forecast {
+  outline: 1px dashed rgba(139, 92, 246, 0.45);
+}
+
 .captain-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));

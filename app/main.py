@@ -18,6 +18,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.ai_predictor import clear_ai_prediction_cache
 from app.config import get_openai_status, get_settings, init_openai_verification
 from app.xml_parser import import_schedules
 from app.database import get_db, init_db
@@ -29,8 +30,12 @@ from app.predictor import (
     rebuild_patterns,
 )
 from app.schemas import (
+    AiPredictionMeta,
+    BusyCalendarResponse,
     CaptainPrediction,
+    CaptainSummariesResponse,
     CaptainSummary,
+    PredictionsResponse,
     ScheduleEntryOut,
     ShipCapacityOut,
     StatsOut,
@@ -247,6 +252,7 @@ async def upload_xml(
 
         batch_id, imported, skipped, errors = import_schedules(db, content, filename)
         rebuild_patterns(db)
+        clear_ai_prediction_cache()
 
         if imported == 0 and skipped == 0:
             detail = errors[0] if errors else "No valid entries could be imported from this XML"
@@ -291,38 +297,54 @@ def list_schedules(
     return q.order_by(ScheduleEntry.schedule_date, ScheduleEntry.checkin_time).limit(limit).all()
 
 
-@app.get("/api/predictions", response_model=list[CaptainPrediction])
+@app.get("/api/predictions", response_model=PredictionsResponse)
 def get_predictions(
     boat_code: str | None = None,
     days_ahead: int = Query(default=90, ge=7, le=365),
     min_confidence: float = Query(default=0.15, ge=0.0, le=1.0),
+    use_ai: bool = Query(default=True),
     db: Session = Depends(get_db),
 ):
-    """Return forecasted captain shifts for the next N days."""
-    return predict_captain_schedule(
+    """Return forecasted captain shifts for the next N days, optionally AI-enhanced."""
+    predictions, meta = predict_captain_schedule(
         db,
         boat_code=boat_code,
         days_ahead=days_ahead,
         min_confidence=min_confidence,
+        use_ai=use_ai,
+    )
+    return PredictionsResponse(
+        predictions=predictions,
+        ai=AiPredictionMeta(**meta),
     )
 
 
-@app.get("/api/captains", response_model=list[CaptainSummary])
+@app.get("/api/captains", response_model=CaptainSummariesResponse)
 def list_captains(
     days_ahead: int = Query(default=90, ge=7, le=365),
+    use_ai: bool = Query(default=True),
     db: Session = Depends(get_db),
 ):
     """Return per-captain summaries with next predicted shift."""
-    return get_captain_summaries(db, days_ahead=days_ahead)
+    captains, meta = get_captain_summaries(db, days_ahead=days_ahead, use_ai=use_ai)
+    return CaptainSummariesResponse(
+        captains=captains,
+        ai=AiPredictionMeta(**meta),
+    )
 
 
-@app.get("/api/busy-calendar")
+@app.get("/api/busy-calendar", response_model=BusyCalendarResponse)
 def busy_calendar(
     days_ahead: int = Query(default=90, ge=7, le=365),
+    use_ai: bool = Query(default=True),
     db: Session = Depends(get_db),
 ):
     """Return daily port busyness estimates based on ship passenger capacity."""
-    return get_busy_calendar(db, days_ahead=days_ahead)
+    calendar, meta = get_busy_calendar(db, days_ahead=days_ahead, use_ai=use_ai)
+    return BusyCalendarResponse(
+        calendar=calendar,
+        ai=AiPredictionMeta(**meta),
+    )
 
 
 @app.get("/api/ships", response_model=list[ShipCapacityOut])

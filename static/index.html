@@ -130,7 +130,8 @@
       <section class="tab-panel active" id="panel-predictions">
         <div class="card">
           <h2>Future Captain Shifts</h2>
-          <p class="card-desc">Predicted work days with scheduling rules: one boat per ship, no overlapping captain shifts, alphabetical dispatch, 3-hour turnaround between tours</p>
+          <p class="card-desc">Predicted work days with scheduling rules: one boat per ship, no overlapping captain shifts, alphabetical dispatch, 3-hour turnaround between tours. OpenAI can forecast ships and suggest assignments when enabled.</p>
+          <div id="predictionsAiBanner" class="repair-summary hidden"></div>
           <div class="table-wrap">
             <table>
               <thead>
@@ -142,11 +143,12 @@
                   <th>Check-in</th>
                   <th>Return</th>
                   <th>Confidence</th>
+                  <th>Source</th>
                   <th>Busy Day</th>
                 </tr>
               </thead>
               <tbody id="predictionsBody">
-                <tr><td colspan="8" class="empty">Clean XML above and click Send to Prediction Generator</td></tr>
+                <tr><td colspan="9" class="empty">Clean XML above and click Send to Prediction Generator</td></tr>
               </tbody>
             </table>
           </div>

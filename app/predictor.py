@@ -10,6 +10,7 @@ Core approach:
   3. For each future date, apply matching weekday patterns and attach busy-day scores
   4. Enforce scheduling constraints: one boat per ship at a time, no captain overlap,
      alphabetical boat dispatch order, and 3-hour minimum turnaround between tours
+  5. Optionally use OpenAI to forecast ships in port and suggest captain assignments
 """
 
 from collections import defaultdict
@@ -18,10 +19,18 @@ from datetime import date, timedelta
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.ai_predictor import (
+    ai_forecast_ships_for_dates,
+    ai_suggest_captain_shifts,
+    clear_ai_prediction_cache,
+    dates_without_actual_data,
+    get_ai_ship_names_for_date,
+)
+from app.config import get_settings
 from app.models import CaptainPattern, ScheduleEntry
 from app.scheduler import ShiftCandidate, apply_scheduling_constraints
 from app.schemas import CaptainPrediction, CaptainSummary
-from app.ship_data import estimate_daily_passengers, get_ship_capacity
+from app.ship_data import estimate_daily_passengers, get_ship_capacity, normalize_ship_name
 
 DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
@@ -94,16 +103,36 @@ def _ships_on_date(db: Session, schedule_date: date) -> list[str]:
     return [r[0] for r in rows]
 
 
-def _predict_ships_for_date(db: Session, schedule_date: date) -> list[str]:
+def _ship_matches_expected(expected: str, candidate: str) -> bool:
+    """Return True when two ship names likely refer to the same vessel."""
+    a = normalize_ship_name(expected)
+    b = normalize_ship_name(candidate)
+    if a == b or a in b or b in a:
+        return True
+    from difflib import SequenceMatcher
+
+    return SequenceMatcher(None, a, b).ratio() >= 0.88
+
+
+def _predict_ships_for_date(
+    db: Session,
+    schedule_date: date,
+    ai_forecasts: dict[date, list[dict[str, str]]] | None = None,
+) -> list[str]:
     """
     Determine which ships are expected in port on a date.
 
-    Uses actual uploaded data when available; otherwise falls back to the most
-    frequently seen ships on the same weekday in historical data.
+    Uses actual uploaded data when available; otherwise AI forecasts (if provided),
+    then falls back to the most frequently seen ships on the same weekday.
     """
     actual = _ships_on_date(db, schedule_date)
     if actual:
         return actual
+
+    if ai_forecasts:
+        ai_ships = get_ai_ship_names_for_date(db, schedule_date, ai_forecasts)
+        if ai_ships:
+            return ai_ships
 
     dow = schedule_date.weekday()
     # SQLite strftime('%w'): 0=Sunday … 6=Saturday; Python weekday(): 0=Monday … 6=Sunday
@@ -123,7 +152,8 @@ def predict_captain_schedule(
     boat_code: str | None = None,
     days_ahead: int = 90,
     min_confidence: float = 0.15,
-) -> list[CaptainPrediction]:
+    use_ai: bool = True,
+) -> tuple[list[CaptainPrediction], dict]:
     """
     Generate future captain shift predictions for the next N days.
 
@@ -132,15 +162,37 @@ def predict_captain_schedule(
       - Captains are never scheduled for overlapping tours
       - Boats are assigned in alphabetical order when multiple are eligible
       - At least 3 hours separate consecutive tours for the same boat
+
+    When OpenAI is configured and use_ai=True, the API also:
+      - Forecasts ships in port for dates without uploaded schedule data
+      - Suggests captain assignments for ships not covered by learned patterns
+
+    Returns (predictions, metadata) where metadata includes ai_assisted flag.
     """
+    ai_meta = {"ai_assisted": False, "ai_ship_forecasts": 0, "ai_captain_suggestions": 0, "message": None}
+
     patterns = db.query(CaptainPattern).all()
     if not patterns:
         rebuild_patterns(db)
         patterns = db.query(CaptainPattern).all()
     if not patterns:
-        return []
+        return [], ai_meta
 
     today = date.today()
+    end_date = today + timedelta(days=days_ahead)
+    ai_forecasts: dict[date, list[dict[str, str]]] = {}
+    ai_enabled = use_ai and get_settings().openai.is_configured
+
+    if ai_enabled:
+        missing_dates = dates_without_actual_data(db, today, end_date)
+        if missing_dates:
+            ai_forecasts = ai_forecast_ships_for_dates(db, missing_dates)
+            if ai_forecasts:
+                ai_meta["ai_assisted"] = True
+                ai_meta["ai_ship_forecasts"] = len(ai_forecasts)
+                ai_meta["message"] = f"AI forecast ships for {len(ai_forecasts)} dates"
+
+    all_boat_codes = sorted({p.boat_code for p in patterns})
     candidates: list[ShiftCandidate] = []
 
     for offset in range(days_ahead + 1):
@@ -150,11 +202,14 @@ def predict_captain_schedule(
         if boat_code:
             day_patterns = [p for p in day_patterns if p.boat_code == boat_code]
 
-        ships = _predict_ships_for_date(db, target)
+        ships = _predict_ships_for_date(db, target, ai_forecasts)
         passenger_total, busy_score = estimate_daily_passengers(db, ships)
 
         for pattern in day_patterns:
             if pattern.confidence < min_confidence:
+                continue
+            # When we know which ships are in port, prefer patterns for those vessels.
+            if ships and not any(_ship_matches_expected(ship, pattern.ship) for ship in ships):
                 continue
 
             ship_capacity = get_ship_capacity(db, pattern.ship).passenger_capacity
@@ -169,8 +224,31 @@ def predict_captain_schedule(
                     confidence=pattern.confidence,
                     passenger_estimate=ship_capacity,
                     busy_score=busy_score,
+                    source="pattern",
                 )
             )
+
+        # AI captain suggestions for ships in port that patterns did not cover.
+        if ai_enabled and ships:
+            covered_ships = {c.ship for c in candidates if c.schedule_date == target}
+            uncovered = [s for s in ships if not any(_ship_matches_expected(s, c) for c in covered_ships)]
+            if uncovered:
+                ships_with_times = ai_forecasts.get(target) or [
+                    {"ship": s, "checkin_time": "7:00 AM", "return_time": "3:00 PM"} for s in ships
+                ]
+                ai_candidates = ai_suggest_captain_shifts(
+                    db,
+                    target,
+                    ships_with_times,
+                    uncovered,
+                    all_boat_codes if not boat_code else [boat_code],
+                )
+                if ai_candidates:
+                    ai_meta["ai_assisted"] = True
+                    ai_meta["ai_captain_suggestions"] += len(ai_candidates)
+                    if not ai_meta["message"]:
+                        ai_meta["message"] = "AI suggested captain assignments for uncovered ships"
+                    candidates.extend(ai_candidates)
 
     scheduled = apply_scheduling_constraints(candidates)
 
@@ -185,16 +263,18 @@ def predict_captain_schedule(
             confidence=c.confidence,
             passenger_estimate=c.passenger_estimate,
             busy_score=c.busy_score,
-            source="scheduled",
+            source=c.source,
         )
         for c in scheduled
     ]
 
     predictions.sort(key=lambda p: (p.schedule_date, p.checkin_time, p.boat_code))
-    return predictions
+    return predictions, ai_meta
 
 
-def get_captain_summaries(db: Session, days_ahead: int = 90) -> list[CaptainSummary]:
+def get_captain_summaries(
+    db: Session, days_ahead: int = 90, use_ai: bool = True
+) -> tuple[list[CaptainSummary], dict]:
     """
     Build a per-captain overview: historical shift count, predicted count, and next shift.
 
@@ -216,6 +296,11 @@ def get_captain_summaries(db: Session, days_ahead: int = 90) -> list[CaptainSumm
         )
 
     summaries: list[CaptainSummary] = []
+    all_preds, combined_meta = predict_captain_schedule(db, days_ahead=days_ahead, use_ai=use_ai)
+    preds_by_code: dict[str, list[CaptainPrediction]] = defaultdict(list)
+    for pred in all_preds:
+        preds_by_code[pred.boat_code].append(pred)
+
     for (code,) in codes:
         historical = (
             db.query(func.sum(CaptainPattern.occurrence_count))
@@ -223,7 +308,10 @@ def get_captain_summaries(db: Session, days_ahead: int = 90) -> list[CaptainSumm
             .scalar()
             or 0
         )
-        preds = predict_captain_schedule(db, boat_code=code, days_ahead=days_ahead)
+        preds = sorted(
+            preds_by_code.get(code, []),
+            key=lambda p: (p.schedule_date, p.checkin_time, p.boat_code),
+        )
         next_shift = preds[0] if preds else None
         summaries.append(
             CaptainSummary(
@@ -234,10 +322,10 @@ def get_captain_summaries(db: Session, days_ahead: int = 90) -> list[CaptainSumm
             )
         )
 
-    return summaries
+    return summaries, combined_meta
 
 
-def get_busy_calendar(db: Session, days_ahead: int = 90) -> list[dict]:
+def get_busy_calendar(db: Session, days_ahead: int = 90, use_ai: bool = True) -> tuple[list[dict], dict]:
     """
     Build a day-by-day calendar of estimated port busyness.
 
@@ -245,11 +333,24 @@ def get_busy_calendar(db: Session, days_ahead: int = 90) -> list[dict]:
     whether actual uploaded schedule data exists for that date.
     """
     today = date.today()
+    end_date = today + timedelta(days=days_ahead)
+    ai_meta = {"ai_assisted": False, "ai_ship_forecasts": 0, "message": None}
+    ai_forecasts: dict[date, list[dict[str, str]]] = {}
+
+    if use_ai and get_settings().openai.is_configured:
+        missing_dates = dates_without_actual_data(db, today, end_date)
+        if missing_dates:
+            ai_forecasts = ai_forecast_ships_for_dates(db, missing_dates)
+            if ai_forecasts:
+                ai_meta["ai_assisted"] = True
+                ai_meta["ai_ship_forecasts"] = len(ai_forecasts)
+                ai_meta["message"] = f"AI forecast ships for {len(ai_forecasts)} dates"
+
     calendar: list[dict] = []
 
     for offset in range(days_ahead + 1):
         target = today + timedelta(days=offset)
-        ships = _predict_ships_for_date(db, target)
+        ships = _predict_ships_for_date(db, target, ai_forecasts)
         passenger_total, busy_score = estimate_daily_passengers(db, ships)
         ship_count = len(ships)
 
@@ -268,7 +369,8 @@ def get_busy_calendar(db: Session, days_ahead: int = 90) -> list[dict]:
                 "passenger_estimate": passenger_total,
                 "busy_score": busy_score,
                 "has_actual_data": actual_count > 0,
+                "ai_forecast": target in ai_forecasts and actual_count == 0,
             }
         )
 
-    return calendar
+    return calendar, ai_meta

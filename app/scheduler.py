@@ -31,6 +31,7 @@ class ShiftCandidate:
     confidence: float
     passenger_estimate: int | None
     busy_score: float
+    source: str = "pattern"
 
 
 def _time_to_minutes(time_str: str) -> int | None:

@@ -105,9 +105,29 @@ function queryParams() {
   return q;
 }
 
+function sourceLabel(source) {
+  if (source === "ai") return '<span class="source-badge ai">AI</span>';
+  return '<span class="source-badge pattern">Pattern</span>';
+}
+
+function showAiPredictionBanner(meta) {
+  const banner = $("#predictionsAiBanner");
+  if (!banner) return;
+  if (!meta || !meta.ai_assisted) {
+    banner.classList.add("hidden");
+    return;
+  }
+  banner.classList.remove("hidden");
+  const parts = [];
+  if (meta.ai_ship_forecasts) parts.push(`${meta.ai_ship_forecasts} ship forecasts`);
+  if (meta.ai_captain_suggestions) parts.push(`${meta.ai_captain_suggestions} AI assignments`);
+  banner.innerHTML = `<strong>AI-enhanced predictions.</strong> ${parts.join(" · ") || meta.message || "OpenAI contributed to this forecast."}`;
+}
+
 async function loadCaptainsFilter() {
   try {
-    const captains = await fetchJSON("/api/captains?days_ahead=90");
+    const resp = await fetchJSON("/api/captains?days_ahead=90");
+    const captains = resp.captains || resp;
     const sel = $("#captainFilter");
     const current = sel.value;
     sel.innerHTML = '<option value="">All captains</option>';
@@ -127,9 +147,11 @@ async function loadCaptainsFilter() {
 async function loadPredictions() {
   const tbody = $("#predictionsBody");
   try {
-    const data = await fetchJSON("/api/predictions" + queryParams());
+    const resp = await fetchJSON("/api/predictions" + queryParams());
+    const data = resp.predictions || resp;
+    showAiPredictionBanner(resp.ai);
     if (!data.length) {
-      tbody.innerHTML = '<tr><td colspan="8" class="empty">No predictions yet — clean XML above and click Send to Prediction Generator</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" class="empty">No predictions yet — clean XML above and click Send to Prediction Generator</td></tr>';
       return;
     }
     tbody.innerHTML = data.slice(0, 200).map((p) => `
@@ -141,14 +163,15 @@ async function loadPredictions() {
         <td>${p.checkin_time}</td>
         <td>${p.return_time}</td>
         <td>${confidenceBar(p.confidence)}</td>
+        <td>${sourceLabel(p.source)}</td>
         <td><span class="busy-badge ${busyClass(p.busy_score)}">${busyLabel(p.busy_score)}</span></td>
       </tr>
     `).join("");
     if (data.length > 200) {
-      tbody.innerHTML += `<tr><td colspan="8" class="empty">Showing first 200 of ${data.length} predictions</td></tr>`;
+      tbody.innerHTML += `<tr><td colspan="9" class="empty">Showing first 200 of ${data.length} predictions</td></tr>`;
     }
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="8" class="empty">Error loading predictions</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="empty">Error loading predictions</td></tr>`;
   }
 }
 
@@ -156,7 +179,9 @@ async function loadCaptainOverview() {
   const grid = $("#captainGrid");
   try {
     const days = $("#daysAhead").value;
-    const data = await fetchJSON(`/api/captains?days_ahead=${days}`);
+    const resp = await fetchJSON(`/api/captains?days_ahead=${days}`);
+    const data = resp.captains || resp;
+    showAiPredictionBanner(resp.ai);
     if (!data.length) {
       grid.innerHTML = '<p class="empty">No captain data yet</p>';
       return;
@@ -166,7 +191,7 @@ async function loadCaptainOverview() {
       const nextHtml = next
         ? `<strong>${formatDate(next.schedule_date)}</strong> · ${next.ship}<br/>
            ${next.checkin_time} – ${next.return_time}<br/>
-           Confidence: ${Math.round(next.confidence * 100)}%`
+           Confidence: ${Math.round(next.confidence * 100)}% · ${next.source === "ai" ? "AI" : "Pattern"}`
         : "No upcoming shifts predicted";
       return `
         <div class="captain-card">
@@ -184,12 +209,14 @@ async function loadCalendar() {
   const grid = $("#calendarGrid");
   try {
     const days = $("#daysAhead").value;
-    const data = await fetchJSON(`/api/busy-calendar?days_ahead=${days}`);
+    const resp = await fetchJSON(`/api/busy-calendar?days_ahead=${days}`);
+    const data = resp.calendar || resp;
     grid.innerHTML = data.map((d) => {
       const dateObj = new Date(d.date + "T00:00:00");
       const bg = `rgba(59, 130, 246, ${0.08 + d.busy_score * 0.45})`;
+      const aiHint = d.ai_forecast ? " · AI ship forecast" : "";
       return `
-        <div class="cal-day${d.has_actual_data ? " actual" : ""}" style="background:${bg}" title="${d.passenger_estimate.toLocaleString()} passengers est.">
+        <div class="cal-day${d.has_actual_data ? " actual" : ""}${d.ai_forecast ? " ai-forecast" : ""}" style="background:${bg}" title="${d.passenger_estimate.toLocaleString()} passengers est.${aiHint}">
           <div class="date-num">${dateObj.getDate()}</div>
           <div class="dow">${d.day_of_week.slice(0, 3)}</div>
           <div class="ships">${d.ship_count} ships</div>
@@ -255,7 +282,7 @@ async function loadAiStatus() {
 
     if (ai.enabled && ai.connected) {
       badge.classList.add("connected");
-      badge.textContent = `AI recovery active · ${ai.model}`;
+      badge.textContent = `AI active · ${ai.model} · XML + predictions`;
     } else if (ai.enabled) {
       badge.classList.add("error");
       badge.textContent = `AI configured but unavailable · ${ai.message}`;
