@@ -29,6 +29,14 @@ class ScheduleEntryOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ScheduleEntryUpdate(BaseModel):
+    """Editable fields for PATCH /api/schedules/{entry_id}."""
+
+    checkin_time: str | None = None
+    return_time: str | None = None
+    boat_codes: str | None = None
+
+
 class UploadResult(BaseModel):
     """Summary returned after a successful XML upload."""
 

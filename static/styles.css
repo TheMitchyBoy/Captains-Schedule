@@ -333,6 +333,37 @@ select {
   cursor: not-allowed;
 }
 
+.btn-sm {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.8rem;
+}
+
+.schedule-actions {
+  white-space: nowrap;
+  display: flex;
+  gap: 0.35rem;
+}
+
+.schedule-edit-input {
+  width: 100%;
+  min-width: 4.5rem;
+  background: var(--surface-2);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.schedule-edit-boats {
+  min-width: 8rem;
+}
+
+tr.schedule-row-editing td {
+  background: rgba(59, 130, 246, 0.08);
+}
+
 .tabs {
   display: flex;
   gap: 0.35rem;

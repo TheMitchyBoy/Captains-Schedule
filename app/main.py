@@ -38,6 +38,7 @@ from app.schemas import (
     CaptainSummary,
     PredictionsResponse,
     ScheduleEntryOut,
+    ScheduleEntryUpdate,
     ShipCapacityOut,
     StatsOut,
     StorageStatusOut,
@@ -47,6 +48,7 @@ from app.schemas import (
 )
 from app.schedule_repair import repair_schedule_berth_mixups
 from app.schedule_dedup import deduplicate_schedule_entries
+from app.schedule_update import update_schedule_entry
 from app.ship_data import lookup_ship_online, seed_ship_capacities
 from app.xml_cleaner import clean_xml_content
 
@@ -413,6 +415,32 @@ def list_schedules(
         q = q.filter(ScheduleEntry.boat_codes.ilike(f"%{boat_code}%"))
 
     return q.order_by(ScheduleEntry.schedule_date, ScheduleEntry.checkin_time).limit(limit).all()
+
+
+@app.patch("/api/schedules/{entry_id}", response_model=ScheduleEntryOut)
+def patch_schedule_entry(
+    entry_id: int,
+    payload: ScheduleEntryUpdate,
+    db: Session = Depends(get_db),
+):
+    """Update check-in, return, and/or boat codes on one schedule row."""
+    if payload.checkin_time is None and payload.return_time is None and payload.boat_codes is None:
+        raise HTTPException(status_code=400, detail="Provide at least one field to update")
+
+    try:
+        entry = update_schedule_entry(
+            db,
+            entry_id,
+            checkin_time=payload.checkin_time,
+            return_time=payload.return_time,
+            boat_codes=payload.boat_codes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    rebuild_patterns(db)
+    clear_ai_prediction_cache()
+    return entry
 
 
 @app.get("/api/predictions", response_model=PredictionsResponse)
