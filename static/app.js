@@ -159,11 +159,15 @@ function predictionsEmptyMessage(stats) {
   return "No predictions yet — upload XML or add tours above to save schedule data to the database";
 }
 
+function sortBoatCodes(codes) {
+  return [...codes].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+}
+
 function formatBoatCodes(value) {
   if (!value) return "—";
-  const codes = value.split(/[,;/]+|\s+and\s+/i).map((c) => c.trim()).filter(Boolean);
+  const codes = value.split(/[,;/]+|\s+and\s+|\s+/i).map((c) => c.trim()).filter(Boolean);
   if (!codes.length) return "—";
-  return codes.map((c) => `<code>${c}</code>`).join(" ");
+  return sortBoatCodes(codes).map((c) => `<code>${c}</code>`).join(" ");
 }
 
 function escapeAttr(value) {
@@ -660,11 +664,16 @@ async function loadPredictions() {
       tbody.innerHTML = `<tr><td colspan="9" class="empty">${predictionsEmptyMessage(stats)}</td></tr>`;
       return;
     }
-    const grouped = groupPredictionsByShip(data);
+    const grouped = groupPredictionsByShip(data).sort((a, b) => {
+      const dateCmp = String(a.schedule_date).localeCompare(String(b.schedule_date));
+      if (dateCmp) return dateCmp;
+      const timeCmp = a.checkin_time.localeCompare(b.checkin_time);
+      if (timeCmp) return timeCmp;
+      return a.ship.localeCompare(b.ship, undefined, { sensitivity: "base" });
+    });
     tbody.innerHTML = grouped.slice(0, 200).map((group) => {
-      const boats = group.boats
-        .sort((a, b) => a.boat_code.localeCompare(b.boat_code))
-        .map((p) => `<code>${p.boat_code}</code>`)
+      const boats = sortBoatCodes(group.boats.map((p) => p.boat_code))
+        .map((code) => `<code>${code}</code>`)
         .join(" ");
       const top = group.boats.reduce((best, p) => (p.confidence > best.confidence ? p : best), group.boats[0]);
       const hasAi = group.boats.some((p) => p.source === "ai");

@@ -82,7 +82,7 @@ def _upsert_schedule_entry(
     if not ship_name:
         raise ValueError("Ship name is required")
 
-    boats = boat_codes.strip()
+    boats = merge_dispatch_codes(boat_codes) if (boat_codes or "").strip() else ""
     header = (date_header or _build_date_header(schedule_date)).strip()[:255]
     berth_value = berth.strip() if berth and berth.strip() else None
     batch_id = upload_batch_id or f"manual-{uuid.uuid4()}"
@@ -305,7 +305,7 @@ def update_schedule_entry(
         new_return = normalized
 
     if boat_codes is not None:
-        new_boats = boat_codes.strip()
+        new_boats = merge_dispatch_codes(boat_codes) if boat_codes.strip() else ""
 
     conflict = _find_exact_duplicate(
         db,

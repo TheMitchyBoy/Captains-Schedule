@@ -113,62 +113,62 @@ def _schedule_day(
     """
     Build a feasible daily schedule from pattern candidates.
 
-    Groups by ship/time slot, then assigns boats in alphabetical order.
-    Larger ships may receive multiple boats concurrently when history shows
-    they typically need more than one tour boat.
+    Boats are processed in alphabetical dispatch order. For each boat, assign
+    eligible tours by check-in time. Multiple boats may serve the same ship
+    concurrently when history shows that ship needs more than one tour boat.
     """
     if not candidates:
         return []
 
-    slots: dict[tuple[str, str, str], list[ShiftCandidate]] = defaultdict(list)
-    for candidate in candidates:
-        key = (candidate.ship, candidate.checkin_time, candidate.return_time)
-        slots[key].append(candidate)
-
-    sorted_slots = sorted(
-        slots.items(),
-        key=lambda item: (
-            _time_to_minutes(item[0][1]) or 9999,
-            item[0][0].lower(),
-        ),
-    )
-
     scheduled: list[ShiftCandidate] = []
     boat_timelines: dict[str, list[tuple[int, int]]] = defaultdict(list)
+    slot_assigned_count: dict[tuple[str, str, str], int] = defaultdict(int)
 
-    for (ship, checkin, return_time), slot_candidates in sorted_slots:
-        start = _time_to_minutes(checkin)
-        end = _time_to_minutes(return_time)
-        if start is None or end is None:
-            continue
-        if end <= start:
-            end += 24 * 60
+    boats_sorted = sorted({candidate.boat_code for candidate in candidates}, key=str.lower)
 
-        expected_boats = 1
-        if slot_boat_counts is not None and day_of_week is not None:
-            expected_boats = max(
-                1,
-                slot_boat_counts.get((ship, day_of_week, checkin, return_time), 1),
+    for boat in boats_sorted:
+        boat_candidates = [candidate for candidate in candidates if candidate.boat_code == boat]
+        boat_candidates.sort(
+            key=lambda candidate: (
+                _time_to_minutes(candidate.checkin_time) or 9999,
+                candidate.ship.lower(),
+                -candidate.confidence,
             )
+        )
 
-        slot_candidates.sort(key=lambda c: (c.boat_code.lower(), -c.confidence))
+        for candidate in boat_candidates:
+            start = _time_to_minutes(candidate.checkin_time)
+            end = _time_to_minutes(candidate.return_time)
+            if start is None or end is None:
+                continue
+            if end <= start:
+                end += 24 * 60
 
-        assigned = 0
-        for candidate in slot_candidates:
-            if assigned >= expected_boats:
-                break
-            if not _can_assign_boat(boat_timelines[candidate.boat_code], start, end):
+            slot_key = (candidate.ship, candidate.checkin_time, candidate.return_time)
+            expected_boats = 1
+            if slot_boat_counts is not None and day_of_week is not None:
+                expected_boats = max(
+                    1,
+                    slot_boat_counts.get(
+                        (candidate.ship, day_of_week, candidate.checkin_time, candidate.return_time),
+                        1,
+                    ),
+                )
+
+            if slot_assigned_count[slot_key] >= expected_boats:
+                continue
+            if not _can_assign_boat(boat_timelines[boat], start, end):
                 continue
 
-            boat_timelines[candidate.boat_code].append((start, end))
+            boat_timelines[boat].append((start, end))
             scheduled.append(candidate)
-            assigned += 1
+            slot_assigned_count[slot_key] += 1
 
     scheduled.sort(
-        key=lambda c: (
-            _time_to_minutes(c.checkin_time) or 9999,
-            c.ship.lower(),
-            c.boat_code.lower(),
+        key=lambda candidate: (
+            _time_to_minutes(candidate.checkin_time) or 9999,
+            candidate.ship.lower(),
+            candidate.boat_code.lower(),
         )
     )
     return scheduled

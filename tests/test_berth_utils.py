@@ -70,3 +70,10 @@ def test_merge_dispatch_codes_deduplicates():
 
     merged = merge_dispatch_codes("BW, BWA", "BWA / DrmC")
     assert merged == "BW, BWA, DrmC"
+
+
+def test_merge_dispatch_codes_sorts_alphabetically():
+    from app.berth_utils import merge_dispatch_codes
+
+    assert merge_dispatch_codes("DrmC, BW", "BWA") == "BW, BWA, DrmC"
+    assert merge_dispatch_codes("ML BW BWA") == "BW, BWA, ML"

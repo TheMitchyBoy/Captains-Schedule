@@ -163,8 +163,13 @@ def split_dispatch_codes(boat_codes: str) -> list[str]:
     return result
 
 
+def sort_boat_codes(codes: list[str]) -> list[str]:
+    """Sort tour boat codes in standard alphabetical dispatch order."""
+    return sorted(codes, key=lambda code: code.lower())
+
+
 def merge_dispatch_codes(*values: str | None) -> str:
-    """Merge boat code strings, deduplicating while preserving order."""
+    """Merge boat code strings, deduplicating and sorting alphabetically."""
     seen: set[str] = set()
     result: list[str] = []
     for value in values:
@@ -174,7 +179,7 @@ def merge_dispatch_codes(*values: str | None) -> str:
                 continue
             seen.add(key)
             result.append(code)
-    return ", ".join(result)
+    return ", ".join(sort_boat_codes(result))
 
 
 def repair_boat_berth_value(boat_codes: str | None, berth: str | None) -> tuple[str, str | None]:
