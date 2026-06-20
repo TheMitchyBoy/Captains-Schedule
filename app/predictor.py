@@ -345,7 +345,7 @@ def predict_captain_schedule(
         for c in scheduled
     ]
 
-    predictions.sort(key=lambda p: (p.schedule_date, p.checkin_time, p.boat_code))
+    predictions.sort(key=lambda p: (p.schedule_date, p.boat_code.lower(), p.checkin_time, p.ship.lower()))
 
     adjustments = list_prediction_adjustments(db)
     if adjustments:

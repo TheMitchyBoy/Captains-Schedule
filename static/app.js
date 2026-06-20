@@ -500,16 +500,60 @@ function setupScheduleFilters() {
   });
 }
 
-function groupPredictionsByShip(rows) {
+function timeToMinutes(value) {
+  if (!value) return 9999;
+  const match = String(value).match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return 9999;
+  return parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
+}
+
+function groupPredictionsByShipDate(rows) {
   const groups = new Map();
   for (const row of rows) {
-    const key = `${row.schedule_date}|${row.ship}|${row.checkin_time}|${row.return_time}`;
+    const key = `${row.schedule_date}|${row.ship}`;
     if (!groups.has(key)) {
-      groups.set(key, { ...row, boats: [] });
+      groups.set(key, {
+        schedule_date: row.schedule_date,
+        day_of_week: row.day_of_week,
+        ship: row.ship,
+        boats: [],
+      });
     }
     groups.get(key).boats.push(row);
   }
-  return [...groups.values()];
+
+  return [...groups.values()].map((group) => {
+    const checkinTimes = group.boats.map((p) => p.checkin_time);
+    const returnTimes = group.boats.map((p) => p.return_time);
+    const top = group.boats.reduce(
+      (best, p) => (p.confidence > best.confidence ? p : best),
+      group.boats[0],
+    );
+    return {
+      ...group,
+      checkin_time: checkinTimes.sort((a, b) => timeToMinutes(a) - timeToMinutes(b))[0],
+      return_time: returnTimes.sort((a, b) => timeToMinutes(b) - timeToMinutes(a))[0],
+      busy_score: top.busy_score,
+      confidence: top.confidence,
+    };
+  });
+}
+
+function sortPredictionGroups(groups) {
+  return groups.sort((a, b) => {
+    const dateCmp = String(a.schedule_date).localeCompare(String(b.schedule_date));
+    if (dateCmp) return dateCmp;
+
+    const aLead = sortBoatCodes([...new Set(a.boats.map((p) => p.boat_code))])[0] || "";
+    const bLead = sortBoatCodes([...new Set(b.boats.map((p) => p.boat_code))])[0] || "";
+    const boatCmp = aLead.localeCompare(bLead, undefined, { sensitivity: "base" });
+    if (boatCmp) return boatCmp;
+
+    const shipCmp = a.ship.localeCompare(b.ship, undefined, { sensitivity: "base" });
+    if (shipCmp) return shipCmp;
+
+    return timeToMinutes(a.checkin_time) - timeToMinutes(b.checkin_time);
+  });
 }
 
 function sourceLabel(source) {
@@ -664,18 +708,10 @@ async function loadPredictions() {
       tbody.innerHTML = `<tr><td colspan="9" class="empty">${predictionsEmptyMessage(stats)}</td></tr>`;
       return;
     }
-    const grouped = groupPredictionsByShip(data).sort((a, b) => {
-      const dateCmp = String(a.schedule_date).localeCompare(String(b.schedule_date));
-      if (dateCmp) return dateCmp;
-      const timeCmp = a.checkin_time.localeCompare(b.checkin_time);
-      if (timeCmp) return timeCmp;
-      return a.ship.localeCompare(b.ship, undefined, { sensitivity: "base" });
-    });
+    const grouped = sortPredictionGroups(groupPredictionsByShipDate(data));
     tbody.innerHTML = grouped.slice(0, 200).map((group) => {
-      const boats = sortBoatCodes(group.boats.map((p) => p.boat_code))
-        .map((code) => `<code>${code}</code>`)
-        .join(" ");
-      const top = group.boats.reduce((best, p) => (p.confidence > best.confidence ? p : best), group.boats[0]);
+      const boatCodes = sortBoatCodes([...new Set(group.boats.map((p) => p.boat_code))]);
+      const boats = boatCodes.map((code) => `<code>${code}</code>`).join(" ");
       const hasAi = group.boats.some((p) => p.source === "ai");
       return `
       <tr>
@@ -685,9 +721,9 @@ async function loadPredictions() {
         <td>${group.ship}</td>
         <td>${group.checkin_time}</td>
         <td>${group.return_time}</td>
-        <td>${confidenceBar(top.confidence)}</td>
+        <td>${confidenceBar(group.confidence)}</td>
         <td>${hasAi ? sourceLabel("ai") : sourceLabel("pattern")}</td>
-        <td><span class="busy-badge ${busyClass(top.busy_score)}">${busyLabel(top.busy_score)}</span></td>
+        <td><span class="busy-badge ${busyClass(group.busy_score)}">${busyLabel(group.busy_score)}</span></td>
       </tr>
     `;
     }).join("");
