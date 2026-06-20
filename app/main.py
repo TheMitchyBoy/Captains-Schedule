@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.ai_prediction_chat import chat_with_prediction_assistant
+from app.ai_predictor import clear_ai_prediction_cache
 from app.config import get_openai_status, get_settings, init_openai_verification
 from app.csv_parser import import_csv_schedules, looks_like_csv
 from app.xml_parser import import_schedules
@@ -59,6 +60,7 @@ from app.prediction_adjustments import (
     list_prediction_adjustments,
 )
 from app.schedule_dedup import deduplicate_schedule_entries
+from app.schedule_repair import repair_schedule_berth_mixups
 from app.schedule_update import bulk_create_schedule_entries, create_schedule_entry, update_schedule_entry
 from app.ship_data import lookup_ship_online, seed_ship_capacities
 from app.xml_cleaner import clean_xml_content
