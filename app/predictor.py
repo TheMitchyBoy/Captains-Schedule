@@ -90,6 +90,22 @@ def _boats_assigned_to_ship(
     )
 
 
+def ensure_prediction_patterns(db: Session) -> int:
+    """
+    Rebuild learned captain patterns from stored schedule rows when needed.
+
+    Returns the current pattern count after ensuring patterns exist.
+    """
+    entry_count = db.query(func.count(ScheduleEntry.id)).scalar() or 0
+    if not entry_count:
+        return 0
+
+    pattern_count = db.query(func.count(CaptainPattern.id)).scalar() or 0
+    if pattern_count == 0:
+        return rebuild_patterns(db)
+    return pattern_count
+
+
 def rebuild_patterns(db: Session) -> int:
     """
     Recompute all captain patterns from the full schedule history.
@@ -222,7 +238,7 @@ def predict_captain_schedule(
 
     patterns = db.query(CaptainPattern).all()
     if not patterns:
-        rebuild_patterns(db)
+        ensure_prediction_patterns(db)
         patterns = db.query(CaptainPattern).all()
     if not patterns:
         return [], ai_meta

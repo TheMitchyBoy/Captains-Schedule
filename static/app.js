@@ -122,9 +122,41 @@ function queryParams() {
   const captain = $("#captainFilter").value;
   const days = $("#daysAhead").value;
   const conf = $("#minConfidence").value;
-  let q = `?days_ahead=${days}&min_confidence=${conf}`;
+  const useAi = $("#useAiPredictions")?.checked ? "true" : "false";
+  let q = `?days_ahead=${days}&min_confidence=${conf}&use_ai=${useAi}`;
   if (captain) q += `&boat_code=${encodeURIComponent(captain)}`;
   return q;
+}
+
+function predictionQueryParams() {
+  return queryParams();
+}
+
+function dashboardQueryParams() {
+  const days = $("#daysAhead").value;
+  const useAi = $("#useAiPredictions")?.checked ? "true" : "false";
+  return `?days_ahead=${days}&use_ai=${useAi}`;
+}
+
+async function ensurePredictionPatterns() {
+  try {
+    const stats = await fetchJSON("/api/stats");
+    if (stats.total_entries > 0 && !stats.patterns_learned) {
+      await fetch(API + "/api/patterns/rebuild", { method: "POST" });
+    }
+  } catch (e) {
+    console.error("Pattern rebuild error:", e);
+  }
+}
+
+function predictionsEmptyMessage(stats) {
+  if (stats?.total_entries > 0 && !stats?.patterns_learned) {
+    return "Schedule data is saved, but no tour boat patterns were learned yet. Upload dispatch XML or bulk-add tours with boat codes (BW, DrmC, JR).";
+  }
+  if (stats?.total_entries > 0) {
+    return "No predictions matched the current filters. Try lowering min confidence or extending the forecast horizon.";
+  }
+  return "No predictions yet — upload XML or add tours above to save schedule data to the database";
 }
 
 function formatBoatCodes(value) {
@@ -497,7 +529,7 @@ function showAiPredictionBanner(meta) {
 
 async function loadCaptainsFilter() {
   try {
-    const resp = await fetchJSON("/api/captains?days_ahead=90");
+    const resp = await fetchJSON("/api/captains" + dashboardQueryParams());
     const captains = resp.captains || resp;
     const sel = $("#captainFilter");
     const current = sel.value;
@@ -517,12 +549,14 @@ async function loadCaptainsFilter() {
 
 async function loadPredictions() {
   const tbody = $("#predictionsBody");
+  tbody.innerHTML = '<tr><td colspan="9" class="empty">Loading predictions from database…</td></tr>';
   try {
-    const resp = await fetchJSON("/api/predictions" + queryParams());
+    const stats = await fetchJSON("/api/stats").catch(() => null);
+    const resp = await fetchJSON("/api/predictions" + predictionQueryParams());
     const data = resp.predictions || resp;
     showAiPredictionBanner(resp.ai);
     if (!data.length) {
-      tbody.innerHTML = '<tr><td colspan="9" class="empty">No predictions yet — upload XML above to save schedule data to the database</td></tr>';
+      tbody.innerHTML = `<tr><td colspan="9" class="empty">${predictionsEmptyMessage(stats)}</td></tr>`;
       return;
     }
     const grouped = groupPredictionsByShip(data);
@@ -551,15 +585,16 @@ async function loadPredictions() {
       tbody.innerHTML += `<tr><td colspan="9" class="empty">Showing first 200 of ${grouped.length} ship assignments</td></tr>`;
     }
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="9" class="empty">Error loading predictions</td></tr>`;
+    console.error("Predictions load error:", e);
+    tbody.innerHTML = `<tr><td colspan="9" class="empty">Error loading predictions: ${escapeAttr(e.message)}</td></tr>`;
   }
 }
 
 async function loadCaptainOverview() {
   const grid = $("#captainGrid");
+  const days = $("#daysAhead").value;
   try {
-    const days = $("#daysAhead").value;
-    const resp = await fetchJSON(`/api/captains?days_ahead=${days}`);
+    const resp = await fetchJSON("/api/captains" + dashboardQueryParams());
     const data = resp.captains || resp;
     showAiPredictionBanner(resp.ai);
     if (!data.length) {
@@ -588,8 +623,7 @@ async function loadCaptainOverview() {
 async function loadCalendar() {
   const grid = $("#calendarGrid");
   try {
-    const days = $("#daysAhead").value;
-    const resp = await fetchJSON(`/api/busy-calendar?days_ahead=${days}`);
+    const resp = await fetchJSON("/api/busy-calendar" + dashboardQueryParams());
     const data = resp.calendar || resp;
     grid.innerHTML = data.map((d) => {
       const dateObj = new Date(d.date + "T00:00:00");
@@ -762,12 +796,15 @@ async function refreshAll() {
     loadStorageStatus(),
     loadStats(),
     loadAiStatus(),
+    loadUploads(),
+    loadSchedules(),
+  ]);
+  await ensurePredictionPatterns();
+  await Promise.all([
     loadCaptainsFilter(),
     loadPredictions(),
     loadCaptainOverview(),
     loadCalendar(),
-    loadUploads(),
-    loadSchedules(),
   ]);
 }
 
@@ -988,7 +1025,7 @@ function setupTabs() {
 }
 
 function setupControls() {
-  ["captainFilter", "daysAhead", "minConfidence"].forEach((id) => {
+  ["captainFilter", "daysAhead", "minConfidence", "useAiPredictions"].forEach((id) => {
     $("#" + id).addEventListener("change", () => {
       loadPredictions();
       loadCaptainOverview();

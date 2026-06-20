@@ -25,6 +25,7 @@ from app.xml_parser import import_schedules
 from app.database import get_db, get_database_label, get_database_path, init_db, DATA_DIR
 from app.models import CaptainPattern, ScheduleEntry, ShipCapacity, UploadLog
 from app.predictor import (
+    ensure_prediction_patterns,
     get_busy_calendar,
     get_captain_summaries,
     predict_captain_schedule,
@@ -187,12 +188,10 @@ def on_startup():
     try:
         seed_ship_capacities(db)
         entry_count = db.query(func.count(ScheduleEntry.id)).scalar() or 0
-        pattern_count = db.query(func.count(CaptainPattern.id)).scalar() or 0
         if entry_count:
             repaired = repair_schedule_berth_mixups(db)
             if repaired:
                 print(f"Repaired {repaired} schedule rows with berth/boat field mixups")
-                rebuild_patterns(db)
             deduped = deduplicate_schedule_entries(db)
             if deduped["rows_deleted"]:
                 print(
@@ -200,11 +199,11 @@ def on_startup():
                     f"({deduped['rows_remaining']} remaining)"
                 )
                 rebuild_patterns(db)
-        if entry_count and pattern_count == 0:
-            rebuilt = rebuild_patterns(db)
-            print(f"Restored {rebuilt} captain patterns from {entry_count} stored schedule entries")
-        elif entry_count:
-            print(f"Loaded {entry_count} schedule entries from {get_database_path()}")
+            patterns_built = ensure_prediction_patterns(db)
+            print(
+                f"Loaded {entry_count} schedule entries and {patterns_built} captain patterns "
+                f"from {get_database_path()}"
+            )
     finally:
         db.close()
 
@@ -536,10 +535,11 @@ def get_predictions(
     boat_code: str | None = None,
     days_ahead: int = Query(default=90, ge=7, le=365),
     min_confidence: float = Query(default=0.15, ge=0.0, le=1.0),
-    use_ai: bool = Query(default=True),
+    use_ai: bool = Query(default=False),
     db: Session = Depends(get_db),
 ):
     """Return forecasted captain shifts for the next N days, optionally AI-enhanced."""
+    ensure_prediction_patterns(db)
     predictions, meta = predict_captain_schedule(
         db,
         boat_code=boat_code,
@@ -556,10 +556,11 @@ def get_predictions(
 @app.get("/api/captains", response_model=CaptainSummariesResponse)
 def list_captains(
     days_ahead: int = Query(default=90, ge=7, le=365),
-    use_ai: bool = Query(default=True),
+    use_ai: bool = Query(default=False),
     db: Session = Depends(get_db),
 ):
     """Return per-captain summaries with next predicted shift."""
+    ensure_prediction_patterns(db)
     captains, meta = get_captain_summaries(db, days_ahead=days_ahead, use_ai=use_ai)
     return CaptainSummariesResponse(
         captains=captains,
@@ -570,10 +571,11 @@ def list_captains(
 @app.get("/api/busy-calendar", response_model=BusyCalendarResponse)
 def busy_calendar(
     days_ahead: int = Query(default=90, ge=7, le=365),
-    use_ai: bool = Query(default=True),
+    use_ai: bool = Query(default=False),
     db: Session = Depends(get_db),
 ):
     """Return daily port busyness estimates based on ship passenger capacity."""
+    ensure_prediction_patterns(db)
     calendar, meta = get_busy_calendar(db, days_ahead=days_ahead, use_ai=use_ai)
     return BusyCalendarResponse(
         calendar=calendar,
@@ -619,7 +621,7 @@ def storage_status(db: Session = Depends(get_db)):
     """Return persistence status so clients know saved data is available without re-upload."""
     total = db.query(func.count(ScheduleEntry.id)).scalar() or 0
     uploads = db.query(func.count(UploadLog.id)).scalar() or 0
-    patterns = db.query(func.count(CaptainPattern.id)).scalar() or 0
+    patterns = ensure_prediction_patterns(db) if total else 0
     start = db.query(func.min(ScheduleEntry.schedule_date)).scalar()
     end = db.query(func.max(ScheduleEntry.schedule_date)).scalar()
     last_upload = db.query(func.max(UploadLog.uploaded_at)).scalar()
@@ -630,8 +632,13 @@ def storage_status(db: Session = Depends(get_db)):
             "Schedule data is saved in the database. Open the app anytime to view predictions "
             "— upload additional XML files only when you have new dispatch schedules."
         )
+    elif total > 0 and patterns == 0:
+        message = (
+            "Schedule entries are saved, but no tour boat patterns were learned yet. "
+            "Add dispatch rows with boat codes (BW, DrmC, JR) via XML upload or bulk add."
+        )
     elif total > 0:
-        message = "Schedule entries found; rebuilding prediction patterns."
+        message = "Schedule entries found; prediction patterns are being rebuilt."
     else:
         message = "No schedule data yet. Upload one or more XML files to start — data will be saved for future visits."
 
