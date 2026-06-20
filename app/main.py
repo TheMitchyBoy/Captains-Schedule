@@ -480,10 +480,15 @@ def create_schedules_bulk(
         use_ai=payload.use_ai,
     )
     if result.rows_created == 0 and result.rows_merged == 0 and not result.rows_parsed:
-        detail = result.errors[0] if result.errors else "No tour lines could be imported"
-        if result.ai_message and result.ai_message not in detail:
-            detail = f"{detail}. {result.ai_message}"
-        raise HTTPException(status_code=400, detail=detail)
+        detail_parts = result.errors[:3] if result.errors else ["No tour lines could be imported"]
+        detail = ". ".join(detail_parts)
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{detail}. Try one ship per block with boat codes and times, "
+                "or use dispatch format: Ship — BW, BWA — 6:15-10:30"
+            ),
+        )
 
     if result.rows_created or result.rows_merged:
         rebuild_patterns(db)

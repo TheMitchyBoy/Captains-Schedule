@@ -9,7 +9,6 @@ from datetime import date
 from sqlalchemy.orm import Session
 
 from app.berth_utils import merge_dispatch_codes
-from app.mms_dispatch_parser import parse_tour_lines_from_text
 from app.models import ScheduleEntry
 from app.ship_data import get_ship_capacity
 from app.xml_cleaner import normalize_time_24h
@@ -190,24 +189,41 @@ def bulk_create_schedule_entries(
     use_ai: bool = True,
 ) -> BulkCreateResult:
     """Parse dispatch-style tour lines for one day and add them to the database."""
-    rows, parse_errors = parse_tour_lines_from_text(
-        text,
-        schedule_date.year,
-        fixed_date=schedule_date,
+    from app.ai_tour_parser import ai_parse_tour_lines
+    from app.bulk_text_parser import (
+        parse_relaxed_bulk_lines,
+        rows_from_prose_fallback,
+        rows_from_tabular_fallback,
     )
+
+    rows, parse_errors = parse_relaxed_bulk_lines(text, schedule_date)
     ai_assisted = False
     ai_message: str | None = None
 
-    if not rows and use_ai:
-        from app.ai_tour_parser import ai_parse_tour_lines
+    if not rows:
+        tabular_rows, tabular_errors = rows_from_tabular_fallback(text, schedule_date)
+        if tabular_rows:
+            rows = tabular_rows
+            parse_errors = tabular_errors
+        else:
+            parse_errors.extend(tabular_errors)
 
-        ai_rows, ai_message = ai_parse_tour_lines(text, schedule_date)
+    if not rows:
+        prose_rows, prose_errors = rows_from_prose_fallback(text, schedule_date)
+        if prose_rows:
+            rows = prose_rows
+            parse_errors = prose_errors
+        else:
+            parse_errors.extend(prose_errors)
+
+    if not rows and use_ai:
+        ai_rows, ai_message = ai_parse_tour_lines(text, schedule_date, db=db)
         if ai_rows:
             rows = ai_rows
             ai_assisted = True
             parse_errors = []
-        elif ai_message and not parse_errors:
-            parse_errors = [ai_message]
+        elif ai_message:
+            parse_errors.append(ai_message)
 
     batch_id = f"manual-bulk-{uuid.uuid4()}"
 

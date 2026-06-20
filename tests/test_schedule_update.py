@@ -216,21 +216,36 @@ def test_bulk_create_skips_exact_duplicate():
     db.close()
 
 
-def test_bulk_create_uses_ai_when_parser_finds_nothing(monkeypatch):
+def test_bulk_create_parses_prose_without_ai():
     db = _make_session()
     messy = "Spirit had JR and LewE at 7am until 1130"
 
-    def fake_ai_parse(text, schedule_date):
+    result = bulk_create_schedule_entries(db, messy, date(2026, 5, 3), use_ai=False)
+
+    assert result.ai_assisted is False
+    assert result.rows_parsed == 1
+    assert result.rows_created == 1
+    row = db.query(ScheduleEntry).one()
+    assert row.ship == "Carnival Spirit"
+    assert "JR" in row.boat_codes
+    db.close()
+
+
+def test_bulk_create_uses_ai_when_parser_finds_nothing(monkeypatch):
+    db = _make_session()
+    messy = "notes: assign BW and BWA to the morning Eurodam group starting 630 ending 1045"
+
+    def fake_ai_parse(text, schedule_date, db=None):
         assert text == messy
         assert schedule_date == date(2026, 5, 3)
         return [
             {
                 "date_header": "Sunday 5/3",
                 "schedule_date": date(2026, 5, 3),
-                "ship": "Carnival Spirit",
-                "checkin_time": "07:00",
-                "return_time": "11:30",
-                "boat_codes": "JR, LewE",
+                "ship": "Eurodam",
+                "checkin_time": "06:30",
+                "return_time": "10:45",
+                "boat_codes": "BW, BWA",
                 "ship_count": None,
             }
         ], "AI decoded 1 tour(s) from pasted text"
@@ -243,15 +258,15 @@ def test_bulk_create_uses_ai_when_parser_finds_nothing(monkeypatch):
     assert result.rows_parsed == 1
     assert result.rows_created == 1
     row = db.query(ScheduleEntry).one()
-    assert row.ship == "Carnival Spirit"
-    assert "JR" in row.boat_codes
+    assert row.ship == "Eurodam"
+    assert "BW" in row.boat_codes
     db.close()
 
 
 def test_bulk_create_skips_ai_when_disabled(monkeypatch):
     db = _make_session()
 
-    def fake_ai_parse(text, schedule_date):
+    def fake_ai_parse(text, schedule_date, db=None):
         raise AssertionError("AI should not be called when use_ai=False")
 
     monkeypatch.setattr("app.ai_tour_parser.ai_parse_tour_lines", fake_ai_parse)
