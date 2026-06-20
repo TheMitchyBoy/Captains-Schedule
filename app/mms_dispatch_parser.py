@@ -63,6 +63,8 @@ DISPATCH_SHIP_ALIASES: dict[str, str] = {
     "c splendor": "Carnival Splendor",
     "c radiance": "Carnival Radiance",
     "c spirit ii": "Carnival Spirit",
+    "coral": "Coral Princess",
+    "island": "Island Princess",
 }
 
 TOUR_LINE_PATTERNS: list[re.Pattern[str]] = [

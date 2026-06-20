@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from app.database import Base
 from app.models import ScheduleEntry
 from app.schedule_dedup import deduplicate_schedule_entries
+from app.ship_identity import canonical_ship_key, ship_names_equivalent
 
 
 def test_deduplicate_merges_boat_codes_and_deletes_extras():
@@ -80,3 +81,81 @@ def test_deduplicate_leaves_distinct_time_slots():
     assert result["rows_deleted"] == 0
     assert db.query(ScheduleEntry).count() == 2
     db.close()
+
+
+def test_deduplicate_merges_ship_name_variants():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+    db = Session()
+
+    base = dict(
+        date_header="Friday 6/19",
+        schedule_date=date(2026, 6, 19),
+        checkin_time="06:15",
+        return_time="10:30",
+        ship_count=1,
+        upload_batch_id="batch-a",
+        berth=None,
+    )
+    db.add(ScheduleEntry(**base, ship="Coral", boat_codes="AriC, BF, BS, BW"))
+    db.add(ScheduleEntry(**base, ship="Coral Princess", boat_codes="AriC, BF, BS, BW"))
+    db.add(ScheduleEntry(**base, ship="CORAL PRINCESS", boat_codes="AriC, BF, BS, BW"))
+    db.commit()
+
+    result = deduplicate_schedule_entries(db)
+    assert result["rows_deleted"] == 2
+    row = db.query(ScheduleEntry).one()
+    assert row.ship == "Coral Princess"
+    assert "BW" in row.boat_codes
+    db.close()
+
+
+def test_deduplicate_merges_port_schedule_into_tour_row():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+    db = Session()
+
+    db.add(
+        ScheduleEntry(
+            date_header="Friday 6/19",
+            schedule_date=date(2026, 6, 19),
+            ship="Coral Princess",
+            checkin_time="06:15",
+            return_time="10:30",
+            boat_codes="AriC, BF, BS, BW",
+            berth=None,
+            ship_count=1,
+            upload_batch_id="manual-a",
+        )
+    )
+    db.add(
+        ScheduleEntry(
+            date_header="Friday 6/19",
+            schedule_date=date(2026, 6, 19),
+            ship="CORAL PRINCESS",
+            checkin_time="06:00",
+            return_time="14:00",
+            boat_codes="",
+            berth="2",
+            ship_count=1,
+            upload_batch_id="batch-b",
+        )
+    )
+    db.commit()
+
+    result = deduplicate_schedule_entries(db)
+    assert result["rows_deleted"] == 1
+    row = db.query(ScheduleEntry).one()
+    assert row.checkin_time == "06:15"
+    assert row.berth == "2"
+    assert "BW" in row.boat_codes
+    db.close()
+
+
+def test_spirit_not_merged_with_carnival_spirit():
+    assert not ship_names_equivalent("Spirit", "Carnival Spirit")
+    assert ship_names_equivalent("C. Spirit", "Carnival Spirit")
+    assert canonical_ship_key("Spirit") == "spirit"
+    assert canonical_ship_key("Carnival Spirit") == "carnival spirit"
