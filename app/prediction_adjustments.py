@@ -83,7 +83,7 @@ def apply_prediction_adjustments(
         )
         existing_keys.add(key)
 
-    filtered.sort(key=lambda p: (p.schedule_date, p.checkin_time, p.boat_code))
+    filtered.sort(key=lambda p: (p.schedule_date, p.boat_code.lower(), p.checkin_time, p.ship.lower()))
     return filtered
 
 

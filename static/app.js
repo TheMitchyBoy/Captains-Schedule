@@ -160,7 +160,27 @@ function predictionsEmptyMessage(stats) {
 }
 
 function sortBoatCodes(codes) {
-  return [...codes].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  return [...new Set(codes.map((code) => String(code).trim()).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b, "en", { numeric: true, sensitivity: "base" }),
+  );
+}
+
+function compareBoatCodes(a, b) {
+  return String(a).localeCompare(String(b), "en", { numeric: true, sensitivity: "base" });
+}
+
+function sortPredictionsByBoatFlow(rows) {
+  return [...rows].sort((a, b) => {
+    const dateCmp = String(a.schedule_date).localeCompare(String(b.schedule_date));
+    if (dateCmp) return dateCmp;
+    const boatCmp = compareBoatCodes(a.boat_code, b.boat_code);
+    if (boatCmp) return boatCmp;
+    const timeCmp = timeToMinutes(a.checkin_time) - timeToMinutes(b.checkin_time);
+    if (timeCmp) return timeCmp;
+    const shipCmp = a.ship.localeCompare(b.ship, undefined, { sensitivity: "base" });
+    if (shipCmp) return shipCmp;
+    return compareBoatCodes(a.return_time, b.return_time);
+  });
 }
 
 function formatBoatCodes(value) {
@@ -507,55 +527,6 @@ function timeToMinutes(value) {
   return parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
 }
 
-function groupPredictionsByShipDate(rows) {
-  const groups = new Map();
-  for (const row of rows) {
-    const key = `${row.schedule_date}|${row.ship}`;
-    if (!groups.has(key)) {
-      groups.set(key, {
-        schedule_date: row.schedule_date,
-        day_of_week: row.day_of_week,
-        ship: row.ship,
-        boats: [],
-      });
-    }
-    groups.get(key).boats.push(row);
-  }
-
-  return [...groups.values()].map((group) => {
-    const checkinTimes = group.boats.map((p) => p.checkin_time);
-    const returnTimes = group.boats.map((p) => p.return_time);
-    const top = group.boats.reduce(
-      (best, p) => (p.confidence > best.confidence ? p : best),
-      group.boats[0],
-    );
-    return {
-      ...group,
-      checkin_time: checkinTimes.sort((a, b) => timeToMinutes(a) - timeToMinutes(b))[0],
-      return_time: returnTimes.sort((a, b) => timeToMinutes(b) - timeToMinutes(a))[0],
-      busy_score: top.busy_score,
-      confidence: top.confidence,
-    };
-  });
-}
-
-function sortPredictionGroups(groups) {
-  return groups.sort((a, b) => {
-    const dateCmp = String(a.schedule_date).localeCompare(String(b.schedule_date));
-    if (dateCmp) return dateCmp;
-
-    const aLead = sortBoatCodes([...new Set(a.boats.map((p) => p.boat_code))])[0] || "";
-    const bLead = sortBoatCodes([...new Set(b.boats.map((p) => p.boat_code))])[0] || "";
-    const boatCmp = aLead.localeCompare(bLead, undefined, { sensitivity: "base" });
-    if (boatCmp) return boatCmp;
-
-    const shipCmp = a.ship.localeCompare(b.ship, undefined, { sensitivity: "base" });
-    if (shipCmp) return shipCmp;
-
-    return timeToMinutes(a.checkin_time) - timeToMinutes(b.checkin_time);
-  });
-}
-
 function sourceLabel(source) {
   if (source === "ai") return '<span class="source-badge ai">AI</span>';
   if (source === "adjustment") return '<span class="source-badge manual">Override</span>';
@@ -708,27 +679,22 @@ async function loadPredictions() {
       tbody.innerHTML = `<tr><td colspan="9" class="empty">${predictionsEmptyMessage(stats)}</td></tr>`;
       return;
     }
-    const grouped = sortPredictionGroups(groupPredictionsByShipDate(data));
-    tbody.innerHTML = grouped.slice(0, 200).map((group) => {
-      const boatCodes = sortBoatCodes([...new Set(group.boats.map((p) => p.boat_code))]);
-      const boats = boatCodes.map((code) => `<code>${code}</code>`).join(" ");
-      const hasAi = group.boats.some((p) => p.source === "ai");
-      return `
+    const sorted = sortPredictionsByBoatFlow(data);
+    tbody.innerHTML = sorted.slice(0, 200).map((row) => `
       <tr>
-        <td>${formatDate(group.schedule_date)}</td>
-        <td>${group.day_of_week}</td>
-        <td>${boats}</td>
-        <td>${group.ship}</td>
-        <td>${group.checkin_time}</td>
-        <td>${group.return_time}</td>
-        <td>${confidenceBar(group.confidence)}</td>
-        <td>${hasAi ? sourceLabel("ai") : sourceLabel("pattern")}</td>
-        <td><span class="busy-badge ${busyClass(group.busy_score)}">${busyLabel(group.busy_score)}</span></td>
+        <td>${formatDate(row.schedule_date)}</td>
+        <td>${row.day_of_week}</td>
+        <td><code>${escapeAttr(row.boat_code)}</code></td>
+        <td>${row.ship}</td>
+        <td>${row.checkin_time}</td>
+        <td>${row.return_time}</td>
+        <td>${confidenceBar(row.confidence)}</td>
+        <td>${sourceLabel(row.source)}</td>
+        <td><span class="busy-badge ${busyClass(row.busy_score)}">${busyLabel(row.busy_score)}</span></td>
       </tr>
-    `;
-    }).join("");
-    if (grouped.length > 200) {
-      tbody.innerHTML += `<tr><td colspan="9" class="empty">Showing first 200 of ${grouped.length} ship assignments</td></tr>`;
+    `).join("");
+    if (sorted.length > 200) {
+      tbody.innerHTML += `<tr><td colspan="9" class="empty">Showing first 200 of ${sorted.length} boat assignments</td></tr>`;
     }
   } catch (e) {
     console.error("Predictions load error:", e);

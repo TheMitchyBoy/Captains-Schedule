@@ -165,7 +165,7 @@ def split_dispatch_codes(boat_codes: str) -> list[str]:
 
 def sort_boat_codes(codes: list[str]) -> list[str]:
     """Sort tour boat codes in standard alphabetical dispatch order."""
-    return sorted(codes, key=lambda code: code.lower())
+    return sorted(codes, key=lambda code: code.casefold())
 
 
 def merge_dispatch_codes(*values: str | None) -> str:
