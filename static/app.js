@@ -510,7 +510,108 @@ function groupPredictionsByShip(rows) {
 
 function sourceLabel(source) {
   if (source === "ai") return '<span class="source-badge ai">AI</span>';
+  if (source === "adjustment") return '<span class="source-badge manual">Override</span>';
   return '<span class="source-badge pattern">Pattern</span>';
+}
+
+let predictionChatHistory = [];
+
+function appendPredictionChatMessage(role, content, actions = []) {
+  const log = $("#predictionChatLog");
+  if (!log) return;
+  const wrapper = document.createElement("div");
+  wrapper.className = `prediction-chat-message ${role}`;
+  const label = role === "user" ? "You" : "Assistant";
+  let html = `<strong>${label}</strong><p>${escapeAttr(content).replace(/\n/g, "<br/>")}</p>`;
+  if (actions?.length) {
+    html += `<ul class="prediction-chat-actions">${actions.map((action) =>
+      `<li>${escapeAttr(action.type)} ${escapeAttr(action.schedule_date || "")} ${escapeAttr(action.boat_code || "")} ${escapeAttr(action.ship || "")}</li>`
+    ).join("")}</ul>`;
+  }
+  wrapper.innerHTML = html;
+  log.appendChild(wrapper);
+  log.scrollTop = log.scrollHeight;
+}
+
+async function sendPredictionChatMessage(event) {
+  event.preventDefault();
+  const input = $("#predictionChatInput");
+  const status = $("#predictionChatStatus");
+  const sendBtn = $("#predictionChatSendBtn");
+  const message = input.value.trim();
+  if (!message) return;
+
+  appendPredictionChatMessage("user", message);
+  predictionChatHistory.push({ role: "user", content: message });
+  input.value = "";
+  status.classList.remove("hidden", "success", "error");
+  status.textContent = "Thinking…";
+  sendBtn.disabled = true;
+
+  try {
+    const days = $("#daysAhead").value;
+    const resp = await fetch(API + "/api/predictions/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message,
+        history: predictionChatHistory.slice(-8),
+        days_ahead: Number(days),
+      }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      throw new Error(data.detail || "Chat request failed");
+    }
+
+    appendPredictionChatMessage("assistant", data.reply, data.actions_applied || []);
+    predictionChatHistory.push({ role: "assistant", content: data.reply });
+    status.classList.add("success");
+    status.textContent = data.predictions_changed
+      ? `Applied ${data.predictions_changed} change(s). Refreshing predictions…`
+      : "Reply ready.";
+
+    await Promise.all([
+      loadPredictions(),
+      loadCaptainOverview(),
+      loadCalendar(),
+      loadCaptainsFilter(),
+    ]);
+  } catch (e) {
+    status.classList.add("error");
+    status.textContent = e.message;
+    appendPredictionChatMessage("assistant", `Sorry, I couldn't apply that: ${e.message}`);
+  } finally {
+    sendBtn.disabled = false;
+  }
+}
+
+async function clearPredictionOverrides() {
+  const status = $("#predictionChatStatus");
+  try {
+    const resp = await fetch(API + "/api/predictions/adjustments/clear", { method: "POST" });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || "Clear failed");
+    status.classList.remove("hidden", "error");
+    status.classList.add("success");
+    status.textContent = `Cleared ${data.removed} override(s).`;
+    await Promise.all([loadPredictions(), loadCaptainOverview(), loadCalendar()]);
+  } catch (e) {
+    status.classList.remove("hidden", "success");
+    status.classList.add("error");
+    status.textContent = e.message;
+  }
+}
+
+function setupPredictionChat() {
+  $("#predictionChatForm")?.addEventListener("submit", sendPredictionChatMessage);
+  $("#clearPredictionOverridesBtn")?.addEventListener("click", clearPredictionOverrides);
+  $("#predictionChatInput")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      $("#predictionChatForm").requestSubmit();
+    }
+  });
 }
 
 function showAiPredictionBanner(meta) {
@@ -1045,6 +1146,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupAddTourForm();
   setupBulkTourForm();
   setupScheduleFilters();
+  setupPredictionChat();
   refreshAll();
   // Focus raw input so users can paste immediately
   $("#rawXmlInput").focus();

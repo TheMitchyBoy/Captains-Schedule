@@ -18,7 +18,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.ai_predictor import clear_ai_prediction_cache
+from app.ai_prediction_chat import chat_with_prediction_assistant
 from app.config import get_openai_status, get_settings, init_openai_verification
 from app.csv_parser import import_csv_schedules, looks_like_csv
 from app.xml_parser import import_schedules
@@ -38,6 +38,9 @@ from app.schemas import (
     CaptainSummariesResponse,
     CaptainSummary,
     PredictionsResponse,
+    PredictionAdjustmentOut,
+    PredictionChatRequest,
+    PredictionChatResponse,
     ScheduleEntryOut,
     ScheduleEntryUpdate,
     ScheduleEntryCreate,
@@ -50,7 +53,11 @@ from app.schemas import (
     XmlCleanResult,
     RepairRecordOut,
 )
-from app.schedule_repair import repair_schedule_berth_mixups
+from app.prediction_adjustments import (
+    clear_prediction_adjustments,
+    delete_prediction_adjustment,
+    list_prediction_adjustments,
+)
 from app.schedule_dedup import deduplicate_schedule_entries
 from app.schedule_update import bulk_create_schedule_entries, create_schedule_entry, update_schedule_entry
 from app.ship_data import lookup_ship_online, seed_ship_capacities
@@ -551,6 +558,44 @@ def get_predictions(
         predictions=predictions,
         ai=AiPredictionMeta(**meta),
     )
+
+
+@app.post("/api/predictions/chat", response_model=PredictionChatResponse)
+def predictions_chat(payload: PredictionChatRequest, db: Session = Depends(get_db)):
+    """Chat with AI to add, remove, or teach prediction changes."""
+    ensure_prediction_patterns(db)
+    result = chat_with_prediction_assistant(
+        db,
+        message=payload.message,
+        history=[item.model_dump() for item in payload.history],
+        days_ahead=payload.days_ahead,
+    )
+    return PredictionChatResponse(**result)
+
+
+@app.get("/api/predictions/adjustments", response_model=list[PredictionAdjustmentOut])
+def get_prediction_adjustments(db: Session = Depends(get_db)):
+    """List saved forecast overrides from AI chat or manual edits."""
+    return list_prediction_adjustments(db)
+
+
+@app.delete("/api/predictions/adjustments/{adjustment_id}")
+def remove_prediction_adjustment(adjustment_id: int, db: Session = Depends(get_db)):
+    """Remove one saved forecast override."""
+    try:
+        delete_prediction_adjustment(db, adjustment_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    clear_ai_prediction_cache()
+    return {"deleted": adjustment_id}
+
+
+@app.post("/api/predictions/adjustments/clear")
+def clear_all_prediction_adjustments(db: Session = Depends(get_db)):
+    """Remove all saved forecast overrides."""
+    removed = clear_prediction_adjustments(db)
+    clear_ai_prediction_cache()
+    return {"removed": removed}
 
 
 @app.get("/api/captains", response_model=CaptainSummariesResponse)

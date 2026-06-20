@@ -29,12 +29,13 @@ from app.ai_predictor import (
 )
 from app.config import get_settings
 from app.database import sql_day_of_week
-from app.models import CaptainPattern, ScheduleEntry
+from app.models import CaptainPattern, PredictionAdjustment, ScheduleEntry
 from app.scheduler import ShiftCandidate, apply_scheduling_constraints
 from app.schemas import CaptainPrediction, CaptainSummary
 from app.ship_data import estimate_daily_passengers, get_ship_capacity, normalize_ship_name
 
 from app.berth_utils import split_dispatch_codes
+from app.prediction_adjustments import apply_prediction_adjustments, list_prediction_adjustments
 
 DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
@@ -345,6 +346,16 @@ def predict_captain_schedule(
     ]
 
     predictions.sort(key=lambda p: (p.schedule_date, p.checkin_time, p.boat_code))
+
+    adjustments = list_prediction_adjustments(db)
+    if adjustments:
+        predictions = apply_prediction_adjustments(predictions, adjustments)
+        override_msg = f"{len(adjustments)} manual/AI override(s) applied"
+        if ai_meta["message"]:
+            ai_meta["message"] += f" · {override_msg}"
+        else:
+            ai_meta["message"] = override_msg
+
     return predictions, ai_meta
 
 

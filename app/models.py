@@ -104,6 +104,26 @@ class CaptainPattern(Base):
     )
 
 
+class PredictionAdjustment(Base):
+    """
+    User or AI chat override for a forecasted captain shift.
+
+    Adds appear in the predictions table; removes hide matching forecast rows.
+    """
+
+    __tablename__ = "prediction_adjustments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    action: Mapped[str] = mapped_column(String(16), nullable=False)  # add | remove
+    schedule_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    boat_code: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    ship: Mapped[str] = mapped_column(String(255), nullable=False)
+    checkin_time: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    return_time: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class UploadLog(Base):
     """
     Record of each XML file upload for auditing and troubleshooting.

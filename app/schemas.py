@@ -204,3 +204,35 @@ class XmlCleanResult(BaseModel):
     repairs: list[RepairRecordOut]
     warnings: list[str] = []
     errors: list[str] = []
+
+
+class PredictionChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class PredictionChatRequest(BaseModel):
+    message: str
+    history: list[PredictionChatMessage] = []
+    days_ahead: int = Field(default=90, ge=7, le=365)
+
+
+class PredictionAdjustmentOut(BaseModel):
+    id: int
+    action: str
+    schedule_date: date
+    boat_code: str
+    ship: str
+    checkin_time: str
+    return_time: str
+    note: str | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class PredictionChatResponse(BaseModel):
+    reply: str
+    actions_applied: list[dict]
+    predictions_changed: int
+    predictions: list[CaptainPrediction] = []

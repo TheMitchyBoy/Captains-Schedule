@@ -240,6 +240,26 @@ Eurodam — BW, BWA — 06:30–10:45"></textarea>
           <h2>Future Captain Shifts</h2>
           <p class="card-desc">Predictions load automatically from saved database history. Upload more XML anytime to extend the forecast.</p>
           <div id="predictionsAiBanner" class="repair-summary hidden"></div>
+          <div class="prediction-chat card nested-card">
+            <div class="prediction-chat-header">
+              <div>
+                <h3>AI Prediction Assistant</h3>
+                <p class="card-desc">Ask the AI to add, remove, or move boat assignments in the forecast.</p>
+              </div>
+              <button type="button" class="btn secondary" id="clearPredictionOverridesBtn">Clear overrides</button>
+            </div>
+            <div id="predictionChatLog" class="prediction-chat-log">
+              <div class="prediction-chat-message assistant">
+                <strong>Assistant</strong>
+                <p>Try: “Add BW to Eurodam on June 20 from 6:30 to 10:45” or “Remove JR from Carnival Spirit next Friday.”</p>
+              </div>
+            </div>
+            <form id="predictionChatForm" class="prediction-chat-form">
+              <textarea id="predictionChatInput" rows="2" placeholder="Tell the AI how to change the predictions…"></textarea>
+              <button type="submit" class="btn primary-action" id="predictionChatSendBtn">Send</button>
+            </form>
+            <div id="predictionChatStatus" class="prediction-chat-status hidden"></div>
+          </div>
           <div class="table-wrap">
             <table>
               <thead>
@@ -358,6 +378,6 @@ Eurodam — BW, BWA — 06:30–10:45"></textarea>
     </footer>
   </div>
 
-  <script src="/static/app.js?v=20260624"></script>
+  <script src="/static/app.js?v=20260625"></script>
 </body>
 </html>
