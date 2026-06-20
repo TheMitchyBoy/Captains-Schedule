@@ -153,8 +153,12 @@ function scheduleSourceLabel(uploadBatchId) {
   return '<span class="source-badge upload">Upload</span>';
 }
 
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function buildSchedulesQuery() {
-  const params = new URLSearchParams({ limit: "2000", order: "desc" });
+  const params = new URLSearchParams({ limit: "2000", order: "desc", through_today: "true" });
   const ship = $("#scheduleFilterShip")?.value.trim();
   const start = $("#scheduleFilterStart")?.value;
   const end = $("#scheduleFilterEnd")?.value;
@@ -434,6 +438,11 @@ function setupBulkTourForm() {
 }
 
 function setupScheduleFilters() {
+  const endInput = $("#scheduleFilterEnd");
+  if (endInput) {
+    endInput.max = todayIso();
+  }
+
   $("#scheduleFilterBtn")?.addEventListener("click", () => {
     highlightScheduleId = null;
     loadSchedules();

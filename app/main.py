@@ -404,6 +404,10 @@ def list_schedules(
     ship: str | None = None,
     boat_code: str | None = None,
     manual_only: bool = Query(default=False, description="Only rows added manually in the dashboard"),
+    through_today: bool = Query(
+        default=False,
+        description="Exclude future schedule dates (for Raw Schedules historical view)",
+    ),
     order: str = Query(default="desc", pattern="^(asc|desc)$"),
     limit: int = Query(default=500, le=2000),
     db: Session = Depends(get_db),
@@ -412,8 +416,13 @@ def list_schedules(
     q = db.query(ScheduleEntry)
     if start_date:
         q = q.filter(ScheduleEntry.schedule_date >= start_date)
-    if end_date:
-        q = q.filter(ScheduleEntry.schedule_date <= end_date)
+
+    effective_end = end_date
+    if through_today:
+        today = date.today()
+        effective_end = min(end_date, today) if end_date else today
+    if effective_end:
+        q = q.filter(ScheduleEntry.schedule_date <= effective_end)
     if ship:
         q = q.filter(ScheduleEntry.ship.ilike(f"%{ship}%"))
     if boat_code:
