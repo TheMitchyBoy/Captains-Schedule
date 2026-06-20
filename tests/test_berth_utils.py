@@ -60,6 +60,11 @@ def test_split_dispatch_codes_supports_slashes():
     assert split_dispatch_codes("DrmC / BW, BWA") == ["DrmC", "BW", "BWA"]
 
 
+def test_split_dispatch_codes_supports_space_separated():
+    assert split_dispatch_codes("ML BW BWA") == ["ML", "BW", "BWA"]
+    assert split_dispatch_codes("DrmC 50 50 FNF GH HR") == ["DrmC", "50/50", "FNF", "GH", "HR"]
+
+
 def test_merge_dispatch_codes_deduplicates():
     from app.berth_utils import merge_dispatch_codes
 

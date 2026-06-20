@@ -135,7 +135,9 @@ def split_dispatch_codes(boat_codes: str) -> list[str]:
     if not boat_codes:
         return []
 
-    text = boat_codes
+    text = boat_codes.strip()
+    text = re.sub(r"\b50\s+50\b", "50/50", text, flags=re.IGNORECASE)
+
     placeholders: dict[str, str] = {}
     for code in sorted(KNOWN_TOUR_BOAT_CODES, key=len, reverse=True):
         if "/" not in code:
@@ -144,7 +146,7 @@ def split_dispatch_codes(boat_codes: str) -> list[str]:
         placeholders[token] = code
         text = re.sub(re.escape(code), token, text, flags=re.IGNORECASE)
 
-    parts = re.split(r"[,;/]+|\s+and\s+", text, flags=re.IGNORECASE)
+    parts = re.split(r"[,;/]+|\s+and\s+|\s+", text, flags=re.IGNORECASE)
     seen: set[str] = set()
     result: list[str] = []
     for part in parts:
