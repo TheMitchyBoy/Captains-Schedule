@@ -159,6 +159,21 @@ function predictionsEmptyMessage(stats) {
   return "No predictions yet — upload XML or add tours above to save schedule data to the database";
 }
 
+function loadingRow(cols, label) {
+  return `<tr class="loading-row"><td colspan="${cols}"><span class="spinner"></span>${label}</td></tr>`;
+}
+
+function updatePredictionsMeta(shown, total) {
+  const meta = $("#predictionsMeta");
+  if (!meta) return;
+  if (!total) {
+    meta.textContent = "";
+    return;
+  }
+  const countText = total > shown ? `Showing ${shown} of ${total}` : `${total} rows`;
+  meta.textContent = `${countText} · boats sorted A→Z within each day`;
+}
+
 function sortBoatCodes(codes) {
   return [...new Set(codes.map((code) => String(code).trim()).filter(Boolean))].sort((a, b) =>
     a.localeCompare(b, "en", { numeric: true, sensitivity: "base" }),
@@ -654,7 +669,7 @@ async function loadCaptainsFilter() {
     const sel = $("#captainFilter");
     const current = sel.value;
     sel.innerHTML = '<option value="">All captains</option>';
-    const codes = [...new Set(captains.map((c) => c.boat_code))].sort();
+    const codes = sortBoatCodes(captains.map((c) => c.boat_code));
     for (const code of codes) {
       const opt = document.createElement("option");
       opt.value = code;
@@ -669,7 +684,7 @@ async function loadCaptainsFilter() {
 
 async function loadPredictions() {
   const tbody = $("#predictionsBody");
-  tbody.innerHTML = '<tr><td colspan="9" class="empty">Loading predictions from database…</td></tr>';
+  tbody.innerHTML = loadingRow(9, "Loading predictions from database…");
   try {
     const stats = await fetchJSON("/api/stats").catch(() => null);
     const resp = await fetchJSON("/api/predictions" + predictionQueryParams());
@@ -677,14 +692,17 @@ async function loadPredictions() {
     showAiPredictionBanner(resp.ai);
     if (!data.length) {
       tbody.innerHTML = `<tr><td colspan="9" class="empty">${predictionsEmptyMessage(stats)}</td></tr>`;
+      updatePredictionsMeta(0, 0);
       return;
     }
     const sorted = sortPredictionsByBoatFlow(data);
-    tbody.innerHTML = sorted.slice(0, 200).map((row) => `
+    const limit = 200;
+    const visible = sorted.slice(0, limit);
+    tbody.innerHTML = visible.map((row) => `
       <tr>
         <td>${formatDate(row.schedule_date)}</td>
         <td>${row.day_of_week}</td>
-        <td><code>${escapeAttr(row.boat_code)}</code></td>
+        <td><span class="boat-badge">${escapeAttr(row.boat_code)}</span></td>
         <td>${row.ship}</td>
         <td>${row.checkin_time}</td>
         <td>${row.return_time}</td>
@@ -693,27 +711,33 @@ async function loadPredictions() {
         <td><span class="busy-badge ${busyClass(row.busy_score)}">${busyLabel(row.busy_score)}</span></td>
       </tr>
     `).join("");
-    if (sorted.length > 200) {
-      tbody.innerHTML += `<tr><td colspan="9" class="empty">Showing first 200 of ${sorted.length} boat assignments</td></tr>`;
+    if (sorted.length > limit) {
+      tbody.innerHTML += `<tr><td colspan="9" class="empty">Showing first ${limit} of ${sorted.length} boat assignments</td></tr>`;
     }
+    updatePredictionsMeta(visible.length, sorted.length);
   } catch (e) {
     console.error("Predictions load error:", e);
     tbody.innerHTML = `<tr><td colspan="9" class="empty">Error loading predictions: ${escapeAttr(e.message)}</td></tr>`;
+    updatePredictionsMeta(0, 0);
   }
 }
 
 async function loadCaptainOverview() {
   const grid = $("#captainGrid");
+  grid.innerHTML = '<p class="empty-state"><span class="spinner"></span> Loading captain data…</p>';
   const days = $("#daysAhead").value;
   try {
     const resp = await fetchJSON("/api/captains" + dashboardQueryParams());
     const data = resp.captains || resp;
     showAiPredictionBanner(resp.ai);
     if (!data.length) {
-      grid.innerHTML = '<p class="empty">No captain data yet</p>';
+      grid.innerHTML = '<p class="empty-state"><span class="empty-state-icon">🚤</span><br>No captain data yet</p>';
       return;
     }
-    grid.innerHTML = data.map((c) => {
+    const sorted = sortBoatCodes(data.map((c) => c.boat_code))
+      .map((code) => data.find((c) => c.boat_code === code))
+      .filter(Boolean);
+    grid.innerHTML = sorted.map((c) => {
       const next = c.next_shift;
       const nextHtml = next
         ? `<strong>${formatDate(next.schedule_date)}</strong> · ${next.ship}<br/>
@@ -734,6 +758,7 @@ async function loadCaptainOverview() {
 
 async function loadCalendar() {
   const grid = $("#calendarGrid");
+  grid.innerHTML = '<p class="empty-state"><span class="spinner"></span> Loading calendar…</p>';
   try {
     const resp = await fetchJSON("/api/busy-calendar" + dashboardQueryParams());
     const data = resp.calendar || resp;
@@ -755,6 +780,7 @@ async function loadCalendar() {
 
 async function loadUploads() {
   const tbody = $("#uploadsBody");
+  tbody.innerHTML = loadingRow(5, "Loading history…");
   try {
     const data = await fetchJSON("/api/uploads");
     if (!data.length) {
@@ -776,6 +802,10 @@ async function loadUploads() {
 }
 
 async function loadSchedules() {
+  const tbody = $("#schedulesBody");
+  if (tbody && !scheduleRows.length) {
+    tbody.innerHTML = loadingRow(9, "Loading schedules…");
+  }
   try {
     const [rows, stats] = await Promise.all([
       fetchJSON(buildSchedulesQuery()),
@@ -845,6 +875,7 @@ async function handleCsvUpload(fileList) {
     if (data.rows_skipped) parts.push(`${data.rows_skipped} unchanged`);
     if (data.notes) parts.push(data.notes);
     resultEl.textContent = parts.join(" · ");
+    $("#csvUploadSection")?.removeAttribute("open");
     await refreshAll();
     switchTab("schedules");
   } catch (e) {
@@ -892,6 +923,7 @@ async function directUploadFiles(fileList) {
     }
     resultEl.classList.add("success");
     resultEl.textContent = "✓ Saved to database — " + summaries.join(" · ");
+    $("#cleanSection")?.removeAttribute("open");
     await refreshAll();
     switchTab("predictions");
   } catch (e) {

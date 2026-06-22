@@ -14,7 +14,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Captain Schedule Predictor</title>
-  <link rel="stylesheet" href="/static/styles.css?v=20260622" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260628" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -42,8 +42,10 @@
     </header>
 
     <main class="main">
-      <!-- CSV schedule upload — primary path for corrected cruise ship data -->
-      <section class="card hero-section csv-section" id="csvUploadSection">
+      <details class="collapsible-section" id="csvUploadSection">
+        <summary>Upload cruise ship schedule (CSV)</summary>
+        <div class="details-body">
+      <section class="card hero-section csv-section">
         <div class="hero-header">
           <div>
             <h2>Upload Cruise Ship Schedule (CSV)</h2>
@@ -67,9 +69,13 @@
         </div>
         <div id="csvUploadResult" class="upload-result hidden"></div>
       </section>
+        </div>
+      </details>
 
-      <!-- Optional XML clean / repair workflow -->
-      <section class="card hero-section" id="cleanSection">
+      <details class="collapsible-section" id="cleanSection">
+        <summary>Clean dispatch XML (optional)</summary>
+        <div class="details-body">
+      <section class="card hero-section">
         <div class="hero-header">
           <div>
             <h2>Clean Dispatch XML</h2>
@@ -129,8 +135,18 @@
         </div>
         <div id="directUploadResult" class="upload-result hidden"></div>
       </section>
+        </div>
+      </details>
 
-      <div class="controls card">
+      <div class="dashboard-toolbar">
+        <nav class="tabs" aria-label="Dashboard sections">
+        <button class="tab active" data-tab="predictions">Predictions</button>
+        <button class="tab" data-tab="captains">Captain Overview</button>
+        <button class="tab" data-tab="calendar">Busy Calendar</button>
+        <button class="tab" data-tab="history">Uploaded History</button>
+        <button class="tab" data-tab="schedules">Raw Schedules</button>
+        </nav>
+        <div class="toolbar-controls controls card">
         <div class="control-group">
           <label for="captainFilter">Captain / Boat Code</label>
           <select id="captainFilter">
@@ -160,7 +176,8 @@
           <input type="checkbox" id="useAiPredictions" />
           Enhance with AI (slower)
         </label>
-        <button type="button" class="btn secondary" id="refreshBtn">Refresh</button>
+        <button type="button" class="btn secondary" id="refreshBtn">↻ Refresh</button>
+        </div>
       </div>
 
       <section class="card tour-management-section" id="tourManagementSection">
@@ -227,18 +244,14 @@ Eurodam — BW, BWA — 06:30–10:45"></textarea>
         </form>
       </section>
 
-      <div class="tabs">
-        <button class="tab active" data-tab="predictions">Predictions</button>
-        <button class="tab" data-tab="captains">Captain Overview</button>
-        <button class="tab" data-tab="calendar">Busy Calendar</button>
-        <button class="tab" data-tab="history">Uploaded History</button>
-        <button class="tab" data-tab="schedules">Raw Schedules</button>
-      </div>
-
       <section class="tab-panel active" id="panel-predictions">
         <div class="card">
-          <h2>Future Captain Shifts</h2>
-          <p class="card-desc">Predictions load automatically from saved database history. Each row is one boat assignment, sorted A→Z by boat code.</p>
+          <div class="card-header">
+            <div>
+              <h2>Future Captain Shifts</h2>
+              <p class="card-desc">Predictions load automatically from saved database history. Each row is one boat assignment, sorted A→Z by boat code.</p>
+            </div>
+          </div>
           <div id="predictionsAiBanner" class="repair-summary hidden"></div>
           <div class="prediction-chat card nested-card">
             <div class="prediction-chat-header">
@@ -276,35 +289,50 @@ Eurodam — BW, BWA — 06:30–10:45"></textarea>
                 </tr>
               </thead>
               <tbody id="predictionsBody">
-                <tr><td colspan="9" class="empty">Upload XML to build history, or open the app later — saved data loads automatically</td></tr>
+                <tr class="loading-row"><td colspan="9"><span class="spinner"></span>Loading predictions…</td></tr>
               </tbody>
             </table>
           </div>
+          <p class="table-meta" id="predictionsMeta"></p>
         </div>
       </section>
 
       <section class="tab-panel" id="panel-captains">
         <div class="card">
-          <h2>Captain Overview</h2>
-          <p class="card-desc">Each captain's next predicted shift and total forecast count</p>
+          <div class="card-header">
+            <div>
+              <h2>Captain Overview</h2>
+              <p class="card-desc">Each captain's next predicted shift and total forecast count</p>
+            </div>
+          </div>
           <div class="captain-grid" id="captainGrid">
-            <p class="empty">No captain data yet</p>
+            <p class="empty-state"><span class="spinner"></span> Loading captain data…</p>
           </div>
         </div>
       </section>
 
       <section class="tab-panel" id="panel-calendar">
         <div class="card">
-          <h2>Busy Day Calendar</h2>
-          <p class="card-desc">Estimated passenger volume from cruise ship capacity data — darker = busier port day</p>
-          <div class="calendar-grid" id="calendarGrid"></div>
+          <div class="card-header">
+            <div>
+              <h2>Busy Day Calendar</h2>
+              <p class="card-desc">Estimated passenger volume from cruise ship capacity data — darker = busier port day</p>
+            </div>
+          </div>
+          <div class="calendar-grid" id="calendarGrid">
+            <p class="empty-state"><span class="spinner"></span> Loading calendar…</p>
+          </div>
         </div>
       </section>
 
       <section class="tab-panel" id="panel-history">
         <div class="card">
-          <h2>Upload History</h2>
-          <p class="card-desc">Every import is logged. Data stays in the database across restarts — you only need to upload when you receive new dispatch schedules.</p>
+          <div class="card-header">
+            <div>
+              <h2>Upload History</h2>
+              <p class="card-desc">Every import is logged. Data stays in the database across restarts — you only need to upload when you receive new dispatch schedules.</p>
+            </div>
+          </div>
           <div class="table-wrap">
             <table>
               <thead>
@@ -317,7 +345,7 @@ Eurodam — BW, BWA — 06:30–10:45"></textarea>
                 </tr>
               </thead>
               <tbody id="uploadsBody">
-                <tr><td colspan="5" class="empty">No uploads yet</td></tr>
+                <tr class="loading-row"><td colspan="5"><span class="spinner"></span>Loading history…</td></tr>
               </tbody>
             </table>
           </div>
@@ -326,8 +354,12 @@ Eurodam — BW, BWA — 06:30–10:45"></textarea>
 
       <section class="tab-panel" id="panel-schedules">
         <div class="card">
-          <h2>Raw Schedules</h2>
-          <p class="card-desc">Historical tour rows through today — future dates appear in Predictions, not here.</p>
+          <div class="card-header">
+            <div>
+              <h2>Raw Schedules</h2>
+              <p class="card-desc">Historical tour rows through today — future dates appear in Predictions, not here.</p>
+            </div>
+          </div>
           <div class="schedule-table-controls">
             <label>
               Ship filter
@@ -365,7 +397,7 @@ Eurodam — BW, BWA — 06:30–10:45"></textarea>
                 </tr>
               </thead>
               <tbody id="schedulesBody">
-                <tr><td colspan="9" class="empty">No schedules stored</td></tr>
+                <tr class="loading-row"><td colspan="9"><span class="spinner"></span>Loading schedules…</td></tr>
               </tbody>
             </table>
           </div>
