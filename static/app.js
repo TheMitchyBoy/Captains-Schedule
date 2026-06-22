@@ -228,6 +228,16 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function addDaysToIsoDate(isoDate, days) {
+  const date = new Date(`${isoDate}T12:00:00`);
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+async function refreshAfterScheduleChange() {
+  await refreshAll();
+}
+
 function buildSchedulesQuery() {
   const params = new URLSearchParams({ limit: "2000", order: "desc", through_today: "true" });
   const ship = $("#scheduleFilterShip")?.value.trim();
@@ -408,14 +418,8 @@ async function addTour(event) {
     $("#addTourBoats").value = "";
     $("#addTourBerth").value = "";
 
-    await loadSchedules();
+    await refreshAfterScheduleChange();
     showSchedulesTab(created.id);
-    await Promise.all([
-      loadStats(),
-      loadPredictions(),
-      loadCaptainOverview(),
-      loadCalendar(),
-    ]);
   } catch (e) {
     resultEl.classList.add("error");
     resultEl.textContent = "Could not add tour: " + e.message;
@@ -485,14 +489,20 @@ async function bulkAddTours(event) {
     resultEl.textContent = message;
 
     if (data.rows_created || data.rows_merged) {
-      await loadSchedules();
-      showSchedulesTab();
-      await Promise.all([
-        loadStats(),
-        loadPredictions(),
-        loadCaptainOverview(),
-        loadCalendar(),
-      ]);
+      $("#bulkTourText").value = "";
+      const dateInput = $("#bulkTourDate");
+      if (dateInput?.value) {
+        dateInput.value = addDaysToIsoDate(dateInput.value, 1);
+      }
+
+      await refreshAfterScheduleChange();
+
+      if (!data.errors?.length) {
+        resultEl.textContent = `${message} · Ready for the next day`;
+      }
+
+      $("#tourManagementSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      $("#bulkTourText")?.focus();
     }
   } catch (e) {
     resultEl.classList.add("error");
